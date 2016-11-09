@@ -324,6 +324,8 @@ private:
   /// \sa naiveCTUEnabled
   Optional<bool> NaiveCTU;
 
+  /// \sa shouldRecordCoverage
+  Optional<StringRef> CoverageExportDir;  
 
   /// A helper function that retrieves option for a given full-qualified
   /// checker name.
@@ -693,6 +695,10 @@ public:
   /// This is an experimental feature to inline functions from another
   /// translation units.
   bool naiveCTUEnabled();
+
+  /// Determines where the coverage info should be dumped to. The coverage
+  /// information is recorded on the basic block level granularity.
+  StringRef coverageExportDir();
 };
   
 using AnalyzerOptionsRef = IntrusiveRefCntPtr<AnalyzerOptions>;

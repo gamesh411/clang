@@ -30,9 +30,10 @@ void foo() {
 // CHECK-NEXT: max-times-inline-large = 32
 // CHECK-NEXT: min-cfg-size-treat-functions-as-large = 14
 // CHECK-NEXT: mode = deep
+// CHECK-NEXT: record-coverage =
 // CHECK-NEXT: region-store-small-struct-limit = 2
 // CHECK-NEXT: serialize-stats = false
 // CHECK-NEXT: unroll-loops = false
 // CHECK-NEXT: widen-loops = false
 // CHECK-NEXT: [stats]
-// CHECK-NEXT: num-entries = 23
+// CHECK-NEXT: num-entries = 24

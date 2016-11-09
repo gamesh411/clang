@@ -475,3 +475,10 @@ StringRef AnalyzerOptions::getCTUIndexName() {
     CTUIndexName = getOptionAsString("ctu-index-name", "externalFnMap.txt");
   return CTUIndexName.getValue();
 }
+
+StringRef AnalyzerOptions::coverageExportDir() {
+  if (!CoverageExportDir.hasValue())
+    CoverageExportDir = getOptionAsString("record-coverage", /*Default=*/"");
+  return CoverageExportDir.getValue();
+}
+
