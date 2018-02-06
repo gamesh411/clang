@@ -49,7 +49,8 @@ public:
   }
 
   virtual void HandleTranslationUnit(ASTContext &Ctx) {
-    handleDecl(Ctx.getTranslationUnitDecl());
+    if (!Ctx.getDiagnostics().hasErrorOccurred())
+      handleDecl(Ctx.getTranslationUnitDecl());
   }
 
 private:
@@ -119,6 +120,5 @@ int main(int argc, const char **argv) {
 
   ClangTool Tool(OptionsParser.getCompilations(),
                  OptionsParser.getSourcePathList());
-  Tool.run(newFrontendActionFactory<MapFunctionNamesAction>().get());
-  return 0;
+  return Tool.run(newFrontendActionFactory<MapFunctionNamesAction>().get());
 }
