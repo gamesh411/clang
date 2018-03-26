@@ -47,7 +47,6 @@ struct StructuralEquivalenceTest : ::testing::Test {
 
       // We should find one Decl but one only.
       assert(FoundDecls.size() == 1);
-
       return FoundDecls[0];
     };
 
@@ -118,6 +117,7 @@ TEST_F(StructuralEquivalenceTest, IntVsSignedIntTemplateSpec) {
       *cast<ClassTemplateDecl>(get<0>(Decls))->spec_begin();
   ClassTemplateSpecializationDecl *Spec1 =
       *cast<ClassTemplateDecl>(get<1>(Decls))->spec_begin();
+
   ASSERT_TRUE(Spec0 != nullptr);
   ASSERT_TRUE(Spec1 != nullptr);
   EXPECT_TRUE(testStructuralMatch(Spec0, Spec1));

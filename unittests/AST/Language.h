@@ -10,11 +10,9 @@
 //  This file defines language options for AST unittests.
 //
 //===----------------------------------------------------------------------===//
-
 #ifndef LLVM_CLANG_UNITTESTS_AST_LANGUAGE_H
 #define LLVM_CLANG_UNITTESTS_AST_LANGUAGE_H
 
-#include "llvm/Support/ErrorHandling.h"
 #include <vector>
 #include <string>
 
