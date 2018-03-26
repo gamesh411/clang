@@ -1234,6 +1234,8 @@ bool ASTNodeImporter::ImportDefinition(RecordDecl *From, RecordDecl *To,
 
   setTypedefNameForAnonDecl(From, To, Importer);
   
+  setTypedefNameForAnonDecl(From, To, Importer);
+
   // Add base classes.
   if (auto *ToCXX = dyn_cast<CXXRecordDecl>(To)) {
     auto *FromCXX = cast<CXXRecordDecl>(From);
@@ -1681,6 +1683,9 @@ Decl *ASTNodeImporter::VisitStaticAssertDecl(StaticAssertDecl *D) {
   DeclContext *DC = Importer.ImportContext(D->getDeclContext());
   if (!DC)
     return nullptr;
+  Decl *AlreadyImported = Importer.GetAlreadyImportedOrNull(D);
+  if (AlreadyImported)
+    return AlreadyImported;
 
   DeclContext *LexicalDC = DC;
 
@@ -2567,7 +2572,12 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
   TypeSourceInfo *TInfo = Importer.Import(D->getTypeSourceInfo());
   if (D->getTypeSourceInfo() && !TInfo)
     return nullptr;
-
+  
+  // Check recursive import.
+  Decl *AlreadyImported = Importer.GetAlreadyImportedOrNull(D);
+  if (AlreadyImported)
+    return AlreadyImported;
+  
   // Create the imported function.
   FunctionDecl *ToFunction = nullptr;
   SourceLocation InnerLocStart = Importer.Import(D->getInnerLocStart());
@@ -3095,6 +3105,9 @@ Decl *ASTNodeImporter::VisitVarDecl(VarDecl *D) {
 
   // Create the imported variable.
   TypeSourceInfo *TInfo = Importer.Import(D->getTypeSourceInfo());
+
+  if (Decl *AlreadyImported = Importer.GetAlreadyImportedOrNull(D))
+    return AlreadyImported;
   VarDecl *ToVar = VarDecl::Create(Importer.getToContext(), DC,
                                    Importer.Import(D->getInnerLocStart()),
                                    Loc, Name.getAsIdentifierInfo(),
@@ -3617,6 +3630,9 @@ Decl *ASTNodeImporter::VisitUsingShadowDecl(UsingShadowDecl *D) {
       Importer.Import(D->getTargetDecl()));
   if (!ToTarget)
     return nullptr;
+
+  if (Decl *AlreadyImported = Importer.GetAlreadyImportedOrNull(D))
+    return AlreadyImported;
 
   UsingShadowDecl *ToShadow = UsingShadowDecl::Create(
         Importer.getToContext(), DC, Loc, ToUsing, ToTarget);
@@ -4780,6 +4796,11 @@ Decl *ASTNodeImporter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
       cast_or_null<FunctionDecl>(Importer.Import(D->getTemplatedDecl()));
   if (!TemplatedFD)
     return nullptr;
+
+  // Check recursive import.
+  Decl *AlreadyImported = Importer.GetAlreadyImportedOrNull(D);
+  if (AlreadyImported)
+    return AlreadyImported;
 
   FunctionTemplateDecl *ToFunc = FunctionTemplateDecl::Create(
       Importer.getToContext(), DC, Loc, Name, Params, TemplatedFD);
@@ -7589,6 +7610,12 @@ void ASTImporter::CompleteDecl (Decl *D) {
 }
 
 Decl *ASTImporter::Imported(Decl *From, Decl *To) {
+  llvm::DenseMap<Decl *, Decl *>::iterator Pos = ImportedDecls.find(From);
+  assert((Pos == ImportedDecls.end() || Pos->second == To) &&
+      "Try to import an already imported Decl");
+  if (Pos != ImportedDecls.end())
+    return Pos->second;
+
   if (From->hasAttrs()) {
     for (const auto *FromAttr : From->getAttrs())
       To->addAttr(Import(FromAttr));
