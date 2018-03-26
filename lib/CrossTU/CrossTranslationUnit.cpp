@@ -21,6 +21,7 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Index/USRGeneration.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
@@ -32,6 +33,18 @@ namespace clang {
 namespace cross_tu {
 
 namespace {
+#define DEBUG_TYPE "CrossTranslationUnit"
+STATISTIC(NumGetCTUCalled, "The # of getCTUDefinition function called");
+STATISTIC(NumNoUnit, "The # of getCTUDefinition NoUnit");
+STATISTIC(
+    NumNotInOtherTU,
+    "The # of getCTUDefinition called but the function is not in other TU");
+STATISTIC(NumIterateNotFound, "The # of iteration not found");
+STATISTIC(NumGetCTUSuccess, "The # of getCTUDefinition successfully return the "
+                            "requested function's body");
+STATISTIC(NumUnsupportedNodeFound, "The # of imports when the ASTImporter "
+                                   "encountered an unsupported AST Node");
+
 // FIXME: This class is will be removed after the transition to llvm::Error.
 class IndexErrorCategory : public std::error_category {
 public:
@@ -248,6 +261,13 @@ CrossTranslationUnitContext::importDefinition(const FunctionDecl *FD) {
   ASTImporter &Importer = getOrCreateASTImporter(FD->getASTContext());
   auto *ToDecl = cast_or_null<FunctionDecl>(
       Importer.Import(const_cast<FunctionDecl *>(FD)));
+  if (Importer.hasEncounteredUnsupportedNode()) {
+    if (ToDecl)
+      InvalidFunctions.insert(ToDecl);
+    Importer.setEncounteredUnsupportedNode(false);
+    NumUnsupportedNodeFound++;
+    return nullptr;
+  }
   assert(ToDecl);
   assert(ToDecl->hasBody());
   assert(FD->hasBody() && "Functions already imported should have body.");
@@ -264,6 +284,10 @@ CrossTranslationUnitContext::getOrCreateASTImporter(ASTContext &From) {
                       From, From.getSourceManager().getFileManager(), false);
   ASTUnitImporterMap[From.getTranslationUnitDecl()].reset(NewImporter);
   return *NewImporter;
+}
+
+bool CrossTranslationUnitContext::isInvalidFunction(const FunctionDecl *FD) {
+  return InvalidFunctions.find(FD) != InvalidFunctions.end();
 }
 
 } // namespace cross_tu

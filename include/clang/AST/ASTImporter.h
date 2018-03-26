@@ -37,7 +37,9 @@ class Decl;
 class DeclContext;
 class Expr;
 class FileManager;
+class IdentifierInfo;
 class NamedDecl;
+class NestedNameSpecifier;
 class Stmt;
 class TagDecl;
 class TypeSourceInfo;
@@ -88,7 +90,11 @@ class Attr;
     /// Declaration (from, to) pairs that are known not to be equivalent
     /// (which we have already complained about).
     NonEquivalentDeclSet NonEquivalentDecls;
-    
+
+    /// This flag signs if the Importer encountered an unsupported node during
+    /// the last import process.
+    bool encounteredUnsupportedNode;
+
   public:
     /// Create a new AST importer.
     ///
@@ -324,6 +330,12 @@ class Attr;
     /// equivalent.
     bool IsStructurallyEquivalent(QualType From, QualType To,
                                   bool Complain = true);
+
+    void setEncounteredUnsupportedNode(bool B) {
+      encounteredUnsupportedNode = B;
+    }
+
+    bool hasEncounteredUnsupportedNode() { return encounteredUnsupportedNode; }
   };
 
 } // namespace clang
