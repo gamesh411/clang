@@ -100,6 +100,8 @@ public:
       return "Failed to generate USR.";
     case index_error_code::triple_mismatch:
       return "Triple mismatch";
+    case index_error_code::lang_mismatch:
+      return "Language mismatch";
     }
     llvm_unreachable("Unrecognized index_error_code.");
   }
@@ -226,6 +228,11 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
         << Unit->getMainFileName() << TripleTo.str() << TripleFrom.str();
     return llvm::make_error<IndexError>(index_error_code::triple_mismatch);
   }
+  const auto& LangTo = Context.getLangOpts();
+  const auto& LangFrom = Unit->getASTContext().getLangOpts();
+  // FIXME: Currenty we do not support the across languages.
+  if (LangTo.CPlusPlus != LangFrom.CPlusPlus)
+    return llvm::make_error<IndexError>(index_error_code::lang_mismatch);
 
   if (DisplayCTUProgress) {
     llvm::errs() << "ANALYZE (CTU loaded AST for source file): "
