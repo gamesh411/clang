@@ -1018,8 +1018,29 @@ bool ASTNodeImporter::ImportDeclParts(NamedDecl *D, DeclContext *&DC,
                                       DeclarationName &Name, 
                                       NamedDecl *&ToD,
                                       SourceLocation &Loc) {
+  // Check if RecordDecl is in FunctionDecl parameters to avoid infinite loop.
+  // example: int struct_in_proto(struct data_t{int a;int b;} *d);
+  DeclContext *OrigDC = D->getDeclContext();
+  FunctionDecl *FunDecl;
+  if (isa<RecordDecl>(D) && (FunDecl = dyn_cast<FunctionDecl>(OrigDC))) {
+    bool DoNotImport = !FunDecl->hasBody();
+    if (!DoNotImport) {
+      SourceRange RecR = D->getSourceRange();
+      SourceRange BodyR = FunDecl->getBody()->getSourceRange();
+      // If RecordDecl is not in Body (it is a param), we bail out.
+      DoNotImport = RecR.isValid() && BodyR.isValid() &&
+                    (RecR.getBegin() < BodyR.getBegin() ||
+                     BodyR.getEnd() < RecR.getEnd());
+    }
+    if (DoNotImport) {
+      Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
+          << D->getDeclKindName();
+      return true;
+    }
+  }
+
   // Import the context of this declaration.
-  DC = Importer.ImportContext(D->getDeclContext());
+  DC = Importer.ImportContext(OrigDC);
   if (!DC)
     return true;
   
@@ -2001,7 +2022,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
   DeclarationName SearchName = Name;
   if (!SearchName && D->getTypedefNameForAnonDecl()) {
     SearchName = Importer.Import(D->getTypedefNameForAnonDecl()->getDeclName());
-    IDNS = Decl::IDNS_Ordinary;
+    IDNS |= Decl::IDNS_Ordinary;
   } else if (Importer.getToContext().getLangOpts().CPlusPlus)
     IDNS |= Decl::IDNS_Ordinary;
 

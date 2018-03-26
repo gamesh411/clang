@@ -246,8 +246,9 @@ llvm::Expected<ASTUnit *> CrossTranslationUnitContext::loadExternalAST(
 llvm::Expected<const FunctionDecl *>
 CrossTranslationUnitContext::importDefinition(const FunctionDecl *FD) {
   ASTImporter &Importer = getOrCreateASTImporter(FD->getASTContext());
-  auto *ToDecl =
-      cast<FunctionDecl>(Importer.Import(const_cast<FunctionDecl *>(FD)));
+  auto *ToDecl = cast_or_null<FunctionDecl>(
+      Importer.Import(const_cast<FunctionDecl *>(FD)));
+  assert(ToDecl);
   assert(ToDecl->hasBody());
   assert(FD->hasBody() && "Functions already imported should have body.");
   return ToDecl;
