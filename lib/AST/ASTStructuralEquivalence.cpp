@@ -46,6 +46,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      Decl *D1, Decl *D2);
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
+                                     FriendDecl *D1, FriendDecl *D2);
+static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      const TemplateArgument &Arg1,
                                      const TemplateArgument &Arg2);
 
@@ -891,6 +893,11 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   if (!D1 || !D2)
     return true;
 
+  // TODO: avoid this case to happen. For now, if the definition is not
+  // done yet, we will not compare for equality and assume that they are equal.
+  if (D1->isBeingDefined() || D2->isBeingDefined())
+    return true;
+
   if (auto *D1CXX = dyn_cast<CXXRecordDecl>(D1)) {
     if (auto *D2CXX = dyn_cast<CXXRecordDecl>(D2)) {
       if (D1CXX->hasExternalLexicalStorage() &&
@@ -1212,15 +1219,66 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
 }
 
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
-                                     FunctionTemplateDecl *D1,
-                                     FunctionTemplateDecl *D2) {
-  // Check template parameters.
-  if (!IsTemplateDeclCommonStructurallyEquivalent(Context, D1, D2))
+                                     FriendDecl *D1, FriendDecl *D2) {
+  if (D1->getFriendType() && D2->getFriendType()) {
+    if (!::IsStructurallyEquivalent(Context,
+                                    D1->getFriendType()->getType(),
+                                    D2->getFriendType()->getType()))
+      return false;
+  } else if (D1->getFriendDecl() && D2->getFriendDecl()) {
+    if (!::IsStructurallyEquivalent(Context, D1->getFriendDecl(),
+                                    D2->getFriendDecl()))
+      return false;
+  }
+
+  return true;
+}
+
+static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
+                                     FunctionDecl *D1, FunctionDecl *D2) {
+  if (!::IsStructurallyEquivalent(Context, D1->getType(), D2->getType()))
     return false;
 
-  // Check the templated declaration.
-  return Context.IsStructurallyEquivalent(D1->getTemplatedDecl()->getType(),
-                                          D2->getTemplatedDecl()->getType());
+  if (D1->getDescribedFunctionTemplate()) {
+    if (D2->getDescribedFunctionTemplate()) {
+      if (!Context.IsStructurallyEquivalent(D1->getDescribedFunctionTemplate(),
+                                            D2->getDescribedFunctionTemplate()))
+        return false;
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
+                                     FunctionTemplateDecl *D1,
+                                     FunctionTemplateDecl *D2) {
+  if (!Context.IsStructurallyEquivalent(D1->getTemplatedDecl(),
+                                        D2->getTemplatedDecl()))
+    return false;
+
+  // Check the template parameter list.
+  TemplateParameterList *TParams1 = D1->getTemplateParameters();
+  TemplateParameterList *TParams2 = D2->getTemplateParameters();
+
+  TemplateParameterList::iterator TP2 = TParams2->begin(),
+                                  TP2End = TParams2->end();
+  for (TemplateParameterList::iterator TP1 = TParams1->begin(),
+                                       TP1End = TParams1->end();
+       TP1 != TP1End; ++TP1, ++TP2) {
+    if (TP2 == TP2End)
+      return false;
+
+    if (!IsStructurallyEquivalent(Context, *TP1, *TP2))
+      return false;
+  }
+
+  if (TP2 != TP2End)
+    return false;
+
+  return true;
 }
 
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
@@ -1347,6 +1405,17 @@ bool StructuralEquivalenceContext::IsStructurallyEquivalent(QualType T1,
   return !Finish();
 }
 
+static bool IsTemplateDeclStructurallyEquivalent(
+    StructuralEquivalenceContext &Ctx, TemplateDecl *D1, TemplateDecl *D2) {
+  if (!IsStructurallyEquivalent(D1->getIdentifier(), D2->getIdentifier()))
+    return false;
+  if (!D1->getIdentifier()) // Special name
+    if (D1->getNameAsString() != D2->getNameAsString())
+      return false;
+  return IsStructurallyEquivalent(Ctx, D1->getTemplateParameters(),
+                                  D2->getTemplateParameters());
+}
+
 bool StructuralEquivalenceContext::Finish() {
   while (!DeclsToCheck.empty()) {
     // Check the next declaration.
@@ -1405,8 +1474,28 @@ bool StructuralEquivalenceContext::Finish() {
       }
     } else if (auto *ClassTemplate1 = dyn_cast<ClassTemplateDecl>(D1)) {
       if (auto *ClassTemplate2 = dyn_cast<ClassTemplateDecl>(D2)) {
-        if (!::IsStructurallyEquivalent(*this, ClassTemplate1,
-                                        ClassTemplate2))
+        if (!::IsTemplateDeclStructurallyEquivalent(*this, ClassTemplate1,
+                                                    ClassTemplate2) ||
+            !::IsStructurallyEquivalent(*this, ClassTemplate1,
+                                        ClassTemplate2) ||
+            !::IsStructurallyEquivalent(
+              *this, ClassTemplate1->getTemplatedDecl(),
+              ClassTemplate2->getTemplatedDecl()))
+          Equivalent = false;
+      } else {
+        // Class template/non-class-template mismatch.
+        Equivalent = false;
+      }
+    } else if (auto *FunctionTemplate1 =
+               dyn_cast<FunctionTemplateDecl>(D1)) {
+      if (auto *FunctionTemplate2 = dyn_cast<FunctionTemplateDecl>(D2)) {
+        if (!::IsTemplateDeclStructurallyEquivalent(*this, FunctionTemplate1,
+                                                    FunctionTemplate2) ||
+            !::IsStructurallyEquivalent(*this, FunctionTemplate1,
+                                        FunctionTemplate2) ||
+            !::IsStructurallyEquivalent(
+              *this, FunctionTemplate1->getTemplatedDecl()->getType(),
+              FunctionTemplate2->getTemplatedDecl()->getType()))
           Equivalent = false;
       } else {
         // Class template/non-class-template mismatch.
@@ -1458,8 +1547,19 @@ bool StructuralEquivalenceContext::Finish() {
       }
     } else if (FriendDecl *FrD1 = dyn_cast<FriendDecl>(D1)) {
       if (FriendDecl *FrD2 = dyn_cast<FriendDecl>(D2)) {
-          if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
-            Equivalent = false;
+        if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
+          Equivalent = false;
+      } else {
+        // Kind mismatch.
+        Equivalent = false;
+      }
+    } else if (FunctionTemplateDecl *FD1 = dyn_cast<FunctionTemplateDecl>(D1)) {
+      if (FunctionTemplateDecl *FD2 = dyn_cast<FunctionTemplateDecl>(D2)) {
+        if (!::IsStructurallyEquivalent(FD1->getIdentifier(),
+                                        FD2->getIdentifier()))
+          Equivalent = false;
+        else if (!::IsStructurallyEquivalent(*this, FD1, FD2))
+          Equivalent = false;
       } else {
         // Kind mismatch.
         Equivalent = false;
