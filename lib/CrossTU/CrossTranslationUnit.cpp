@@ -29,6 +29,36 @@
 #include <fstream>
 #include <sstream>
 
+namespace llvm {
+// Same as Triple's equality operator, but we check a field only if that is
+// known in both instances.
+bool hasEqualKnownFields(const Triple &Lhs, const Triple &Rhs) {
+  return ((Lhs.getArch() != Triple::UnknownArch &&
+           Rhs.getArch() != Triple::UnknownArch)
+              ? Lhs.getArch() == Rhs.getArch()
+              : true) &&
+         ((Lhs.getSubArch() != Triple::NoSubArch &&
+           Rhs.getSubArch() != Triple::NoSubArch)
+              ? Lhs.getSubArch() == Rhs.getSubArch()
+              : true) &&
+         ((Lhs.getVendor() != Triple::UnknownVendor &&
+           Rhs.getVendor() != Triple::UnknownVendor)
+              ? Lhs.getVendor() == Rhs.getVendor()
+              : true) &&
+         ((Lhs.getOS() != Triple::UnknownOS && Rhs.getOS() != Triple::UnknownOS)
+              ? Lhs.getOS() == Rhs.getOS()
+              : true) &&
+         ((Lhs.getEnvironment() != Triple::UnknownEnvironment &&
+           Rhs.getEnvironment() != Triple::UnknownEnvironment)
+              ? Lhs.getEnvironment() == Rhs.getEnvironment()
+              : true) &&
+         ((Lhs.getObjectFormat() != Triple::UnknownObjectFormat &&
+           Rhs.getObjectFormat() != Triple::UnknownObjectFormat)
+              ? Lhs.getObjectFormat() == Rhs.getObjectFormat()
+              : true);
+}
+}
+
 namespace clang {
 namespace cross_tu {
 
@@ -68,6 +98,8 @@ public:
       return "Failed to load external AST source.";
     case index_error_code::failed_to_generate_usr:
       return "Failed to generate USR.";
+    case index_error_code::triple_mismatch:
+      return "Triple mismatch";
     }
     llvm_unreachable("Unrecognized index_error_code.");
   }
@@ -179,6 +211,21 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
         index_error_code::failed_to_get_external_ast);
   assert(&Unit->getFileManager() ==
          &Unit->getASTContext().getSourceManager().getFileManager());
+  const auto& TripleTo = Context.getTargetInfo().getTriple();
+  const auto& TripleFrom = Unit->getASTContext().getTargetInfo().getTriple();
+  // The imported AST had been generated for a different target
+  // TODO use equality operator. Note, for some unknown reason when we do
+  // in-memory/on-the-fly CTU (i.e when the compilation db is given) some
+  // parts of the triple in the loaded ASTContext can be unknown while the
+  // very same parts in the target ASTContext are known. Thus we check for
+  // the known parts only.
+  if (!hasEqualKnownFields(TripleTo, TripleFrom)) {
+    // TODO pass the SourceLocation of the CallExpression for more precise
+    // diagnostics
+    Context.getDiagnostics().Report(diag::err_ctu_incompat_triple)
+        << Unit->getMainFileName() << TripleTo.str() << TripleFrom.str();
+    return llvm::make_error<IndexError>(index_error_code::triple_mismatch);
+  }
 
   if (DisplayCTUProgress) {
     llvm::errs() << "ANALYZE (CTU loaded AST for source file): "
