@@ -6927,22 +6927,39 @@ Decl *ASTImporter::GetAlreadyImportedOrNull(Decl *FromD) {
   }
 }
 
+Decl *ASTImporter::GetVAListTag(Decl *FromD) {
+  if (isa<TypedefDecl>(FromD) &&
+      ToContext.getTargetInfo().getBuiltinVaListKind() ==
+      TargetInfo::PowerABIBuiltinVaList) {
+    const auto *Arr =
+      cast<ConstantArrayType>(ToContext.getBuiltinVaListDecl()->
+                              getUnderlyingType().getTypePtr());
+    const auto *Elem =
+      cast<TypedefType>(Arr->getElementType().getTypePtr());
+    return cast<TypedefDecl>(Elem->getDecl());
+  }
+
+  return ToContext.getVaListTagDecl();
+}
+
 Decl *ASTImporter::Import(Decl *FromD) {
   if (!FromD)
     return nullptr;
 
+  if (const auto *ND = dyn_cast<NamedDecl>(FromD))
+    if (IdentifierInfo *II = ND->getIdentifier())
+      if (II->isStr("__va_list_tag"))
+        return GetVAListTag(FromD);
+
   ASTNodeImporter Importer(*this);
 
-  // Check whether we've already imported this declaration.  
-  llvm::DenseMap<Decl *, Decl *>::iterator Pos = ImportedDecls.find(FromD);
-  if (Pos != ImportedDecls.end()) {
-    Decl *ToD = Pos->second;
-    Importer.ImportDefinitionIfNeeded(FromD, ToD);
+  // Check whether we've already imported this declaration.
+  Decl *ToD = GetAlreadyImportedOrNull(FromD);
+  if (ToD)
     return ToD;
-  }
-  
+
   // Import the type
-  Decl *ToD = Importer.Visit(FromD);
+  ToD = Importer.Visit(FromD);
   if (!ToD)
     return nullptr;
 
