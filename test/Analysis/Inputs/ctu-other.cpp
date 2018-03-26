@@ -68,3 +68,13 @@ int chf1(int x) {
 
 typedef struct { int n; } Anonymous;
 int fun_using_anon_struct(int n) { Anonymous anon; anon.n = n; return anon.n; }
+
+// Test for a crash when importing typedefs.
+struct AVBuffer {
+	int a;
+};
+
+typedef struct AVBuffer avt;
+int avtSize(void){
+	return sizeof(avt);
+}

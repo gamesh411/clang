@@ -42,6 +42,10 @@ int chf1(int x);
 
 int fun_using_anon_struct(int);
 
+// Test for a crash when inlining typedefs.
+typedef struct AVBuffer avt;
+int avtSize(void);
+
 int main() {
   clang_analyzer_eval(f(3) == 2); // expected-warning{{TRUE}}
   clang_analyzer_eval(f(4) == 3); // expected-warning{{TRUE}}
@@ -58,4 +62,5 @@ int main() {
 
   clang_analyzer_eval(chns::chf1(4) == 12); // expected-warning{{TRUE}}
   clang_analyzer_eval(fun_using_anon_struct(8) == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(avtSize() == 4); // expected-warning{{TRUE}}
 }

@@ -1,5 +1,6 @@
 c:@N@chns@F@chf1#I# ctu-other.cpp.ast
 c:@N@myns@N@embed_ns@F@fens#I# ctu-other.cpp.ast
+c:@F@avtSize# ctu-other.cpp.ast
 c:@F@g#I# ctu-other.cpp.ast
 c:@S@mycls@F@fscl#I#S ctu-other.cpp.ast
 c:@S@mycls@F@fcl#I# ctu-other.cpp.ast
