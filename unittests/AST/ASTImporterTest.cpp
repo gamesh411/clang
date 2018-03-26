@@ -2799,7 +2799,6 @@ EXPECT_TRUE(Imported->getPreviousDecl());
 
 struct CanonicalRedeclChain : ASTImporterTestBase {};
 
-/*
 TEST_P(CanonicalRedeclChain, ShouldBeConsequentWithMatchers) {
 Decl *FromTU = getTuDecl("void f();", Lang_CXX);
 auto Pattern = functionDecl(hasName("f"));
@@ -2825,19 +2824,19 @@ EXPECT_EQ(D2, Redecls[2]);
 }
 
 TEST_P(CanonicalRedeclChain, ShouldBeSameForAllDeclInTheChain) {
-Decl *FromTU = getTuDecl("void f(); void f(); void f();", Lang_CXX);
-auto Pattern = functionDecl(hasName("f"));
-auto D0 = FirstDeclMatcher<FunctionDecl>().match(FromTU, Pattern);
-auto D2 = LastDeclMatcher<FunctionDecl>().match(FromTU, Pattern);
-FunctionDecl *D1 = D2->getPreviousDecl();
+  Decl *FromTU = getTuDecl("void f(); void f(); void f();", Lang_CXX);
+  auto Pattern = functionDecl(hasName("f"));
+  auto D0 = FirstDeclMatcher<FunctionDecl>().match(FromTU, Pattern);
+  auto D2 = LastDeclMatcher<FunctionDecl>().match(FromTU, Pattern);
+  FunctionDecl *D1 = D2->getPreviousDecl();
 
-auto RedeclsD0 = getCanonicalForwardRedeclChain(D0);
-auto RedeclsD1 = getCanonicalForwardRedeclChain(D1);
-auto RedeclsD2 = getCanonicalForwardRedeclChain(D2);
+  auto RedeclsD0 = getCanonicalForwardRedeclChain(D0);
+  auto RedeclsD1 = getCanonicalForwardRedeclChain(D1);
+  auto RedeclsD2 = getCanonicalForwardRedeclChain(D2);
 
-EXPECT_THAT(RedeclsD0, ::testing::ContainerEq(RedeclsD1));
-EXPECT_THAT(RedeclsD1, ::testing::ContainerEq(RedeclsD2));
-}*/
+  EXPECT_THAT(RedeclsD0, ::testing::ContainerEq(RedeclsD1));
+  EXPECT_THAT(RedeclsD1, ::testing::ContainerEq(RedeclsD2));
+}
 
 INSTANTIATE_TEST_CASE_P(
 ParameterizedTests, CanonicalRedeclChain,

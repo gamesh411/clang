@@ -73,6 +73,25 @@
 
 namespace clang {
 
+  template <class T>
+  llvm::SmallVector<Decl*, 2>
+  getCanonicalForwardRedeclChain(Redeclarable<T>* D) {
+    llvm::SmallVector<Decl*, 2> Redecls;
+    for (auto R : D->getFirstDecl()->redecls()) {
+      if (R != D->getFirstDecl())
+        Redecls.push_back(R);
+    }
+    Redecls.push_back(D->getFirstDecl());
+    std::reverse(Redecls.begin(), Redecls.end());
+    return Redecls;
+  }
+
+  llvm::SmallVector<Decl*, 2> getCanonicalForwardRedeclChain(Decl* D) {
+    // Currently only FunctionDecl is supported
+    auto FD = cast<FunctionDecl>(D);
+    return getCanonicalForwardRedeclChain<FunctionDecl>(FD);
+  }
+
   class ASTNodeImporter : public TypeVisitor<ASTNodeImporter, QualType>,
                           public DeclVisitor<ASTNodeImporter, Decl *>,
                           public StmtVisitor<ASTNodeImporter, Stmt *> {
@@ -2464,6 +2483,15 @@ bool ASTNodeImporter::ImportTemplateInformation(FunctionDecl *FromFD,
 }
 
 Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
+
+  llvm::SmallVector<Decl*, 2> Redecls = getCanonicalForwardRedeclChain(D);
+  auto RedeclIt = Redecls.begin();
+  // Import the first part of the decl chain. I.e. import all previous
+  // declarations starting from the canonical decl.
+  for (;RedeclIt != Redecls.end() && *RedeclIt != D; ++RedeclIt)
+    Importer.Import(*RedeclIt);
+  assert(*RedeclIt == D);
+
   // Import the major distinguishing characteristics of this function.
   DeclContext *DC, *LexicalDC;
   DeclarationName Name;
@@ -2474,52 +2502,62 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
   if (ToD)
     return ToD;
 
-  const FunctionDecl *FoundWithoutBody = nullptr;
+  const FunctionDecl *FoundByLookup = nullptr;
+  FunctionTemplateDecl *FromFT = D->getDescribedFunctionTemplate();
 
   // Try to find a function in our own ("to") context with the same name, same
   // type, and in the same context as the function we're importing.
   if (!LexicalDC->isFunctionOrMethod()) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
-    unsigned IDNS = Decl::IDNS_Ordinary;
+    unsigned IDNS = Decl::IDNS_Ordinary | Decl::IDNS_OrdinaryFriend;
     SmallVector<NamedDecl *, 2> FoundDecls;
     DC->getRedeclContext()->localUncachedLookup(Name, FoundDecls);
     for (auto *FoundDecl : FoundDecls) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
 
-      if (auto *FoundFunction = dyn_cast<FunctionDecl>(FoundDecl)) {
-        if (FoundFunction->hasExternalFormalLinkage() &&
-            D->hasExternalFormalLinkage()) {
-          if (Importer.IsStructurallyEquivalent(D->getType(), 
-                                                FoundFunction->getType())) {
-            // FIXME: Actually try to merge the body and other attributes.
-            const FunctionDecl *FromBodyDecl = nullptr;
-            D->hasBody(FromBodyDecl);
-            if (D == FromBodyDecl && !FoundFunction->hasBody()) {
-              // This function is needed to merge completely.
-              FoundWithoutBody = FoundFunction;
+      if (!FromFT) {
+        if (auto *FoundFunction = dyn_cast<FunctionDecl>(FoundDecls[I])) {
+          if (FoundFunction->hasExternalFormalLinkage() &&
+              D->hasExternalFormalLinkage()) {
+            if (IsStructuralMatch(D, FoundFunction)) {
+              if (D->doesThisDeclarationHaveABody() &&
+                  FoundFunction->doesThisDeclarationHaveABody())
+                return Importer.Imported(D, FoundFunction);
+              FoundByLookup = FoundFunction;
               break;
             }
-            return Importer.Imported(D, FoundFunction);
+
+            // FIXME: Check for overloading more carefully, e.g., by boosting
+            // Sema::IsOverload out to the AST library.
+
+            // Function overloading is okay in C++.
+            if (Importer.getToContext().getLangOpts().CPlusPlus)
+              continue;
+
+            // Complain about inconsistent function types.
+            Importer.ToDiag(Loc, diag::err_odr_function_type_inconsistent)
+              << Name << D->getType() << FoundFunction->getType();
+            Importer.ToDiag(FoundFunction->getLocation(), 
+                            diag::note_odr_value_here)
+              << FoundFunction->getType();
           }
+        }
 
-          // FIXME: Check for overloading more carefully, e.g., by boosting
-          // Sema::IsOverload out to the AST library.
-
-          // Function overloading is okay in C++.
-          if (Importer.getToContext().getLangOpts().CPlusPlus)
-            continue;
-
-          // Complain about inconsistent function types.
-          Importer.ToDiag(Loc, diag::err_odr_function_type_inconsistent)
-            << Name << D->getType() << FoundFunction->getType();
-          Importer.ToDiag(FoundFunction->getLocation(), 
-                          diag::note_odr_value_here)
-            << FoundFunction->getType();
+        ConflictingDecls.push_back(FoundDecls[I]);
+      } else {
+        if (auto *FoundFunction =
+            dyn_cast<FunctionTemplateDecl>(FoundDecls[I])) {
+          if (FoundFunction->hasExternalFormalLinkage() &&
+              FromFT->hasExternalFormalLinkage()) {
+            if (IsStructuralMatch(FromFT, FoundFunction)) {
+              Importer.Imported(D, FoundFunction->getTemplatedDecl());
+              // FIXME: Actually try to merge the body and other attributes.
+              return FoundFunction->getTemplatedDecl();
+            }
+          }
         }
       }
-
-      ConflictingDecls.push_back(FoundDecl);
     }
 
     if (!ConflictingDecls.empty()) {
@@ -2655,9 +2693,9 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
   }
   ToFunction->setParams(Parameters);
 
-  if (FoundWithoutBody) {
+  if (FoundByLookup) {
     auto *Recent = const_cast<FunctionDecl *>(
-          FoundWithoutBody->getMostRecentDecl());
+          FoundByLookup->getMostRecentDecl());
     ToFunction->setPreviousDecl(Recent);
   }
 
@@ -2679,10 +2717,17 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     ToFunction->setType(T);
   }
 
-  // Import the body, if any.
-  if (Stmt *FromBody = D->getBody()) {
-    if (Stmt *ToBody = Importer.Import(FromBody)) {
-      ToFunction->setBody(ToBody);
+  // Import the describing template function, if any.
+  if (FromFT)
+    if (auto *ToFT = dyn_cast<FunctionTemplateDecl>(Importer.Import(FromFT))) {
+      ToFunction->setDescribedFunctionTemplate(ToFT);
+    }
+
+  if (D->doesThisDeclarationHaveABody()) {
+    if (Stmt *FromBody = D->getBody()) {
+      if (Stmt *ToBody = Importer.Import(FromBody)) {
+        ToFunction->setBody(ToBody);
+      }
     }
   }
 
@@ -2692,13 +2737,29 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
   if (ImportTemplateInformation(D, ToFunction))
     return nullptr;
 
+  bool IsFriend = D->isInIdentifierNamespace(Decl::IDNS_OrdinaryFriend);
+
   // Add this function to the lexical context.
   // NOTE: If the function is templated declaration, it should be not added into
   // LexicalDC. But described template is imported during import of
   // FunctionTemplateDecl (it happens later). So, we use source declaration
   // to determine if we should add the result function.
-  if (!D->getDescribedFunctionTemplate())
+  if (!D->getDescribedFunctionTemplate() && !IsFriend)
     LexicalDC->addDeclInternal(ToFunction);
+
+  // Friend declarations lexical context is the befriending class, but the
+  // semantic context is the enclosing scope of the befriending class.
+  // We want the friend functions to be found in the semantic context by lookup.
+  // FIXME should we handle this genrically in VisitFriendDecl?
+  // In Other cases when LexicalDC != DC we don't want it to be added,
+  // e.g out-of-class definitions like void B::f() {} .
+  if (LexicalDC != DC && IsFriend) {
+    DC->makeDeclVisibleInContext(ToFunction);
+  }
+
+  // Import the rest of the chain. I.e. import all subsequent declarations.
+  for (++RedeclIt; RedeclIt != Redecls.end(); ++RedeclIt)
+    Importer.Import(*RedeclIt);
 
   if (auto *FromCXXMethod = dyn_cast<CXXMethodDecl>(D))
     ImportOverrides(cast<CXXMethodDecl>(ToFunction), FromCXXMethod);
@@ -7004,10 +7065,8 @@ Decl *ASTImporter::Import(Decl *FromD) {
   ToD = Importer.Visit(FromD);
   if (!ToD)
     return nullptr;
+  Imported(FromD, ToD);
 
-  // Record the imported declaration.
-  ImportedDecls[FromD] = ToD;
-  ToD->IdentifierNamespace = FromD->IdentifierNamespace;
   return ToD;
 }
 
@@ -7626,7 +7685,10 @@ Decl *ASTImporter::Imported(Decl *From, Decl *To) {
   if (From->isImplicit()) {
     To->setImplicit();
   }
+  To->IdentifierNamespace = From->IdentifierNamespace;
+  
   ImportedDecls[From] = To;
+  
   return To;
 }
 

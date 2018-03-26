@@ -35,6 +35,7 @@ class CXXBaseSpecifier;
 class CXXCtorInitializer;
 class Decl;
 class DeclContext;
+class DiagnosticsEngine;
 class Expr;
 class FileManager;
 class IdentifierInfo;
@@ -44,6 +45,15 @@ class Stmt;
 class TagDecl;
 class TypeSourceInfo;
 class Attr;
+
+  // \brief Returns with a list of declarations started from the canonical decl
+  // then followed by subsequent decls in the translation unit.
+  // This gives a canonical list for each entry in the redecl chain.
+  // `Decl::redecls()` gives a list of decls which always start from the
+  // previous decl and the next item is actually the previous item in the order
+  // of source locations.  Thus, `Decl::redecls()` gives different lists for
+  // the different entries in a given redecl chain.
+  llvm::SmallVector<Decl*, 2> getCanonicalForwardRedeclChain(Decl* D);
 
   /// Imports selected nodes from one AST context into another context,
   /// merging AST nodes where appropriate.
