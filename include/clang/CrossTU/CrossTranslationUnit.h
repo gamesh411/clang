@@ -108,7 +108,7 @@ public:
   /// Note that the AST files should also be in the \p CrossTUDir.
   llvm::Expected<const FunctionDecl *>
   getCrossTUDefinition(const FunctionDecl *FD, StringRef CrossTUDir,
-                       StringRef IndexName);
+                       StringRef IndexName, bool DisplayCTUProgress = false);
 
   /// This function loads a function definition from an external AST
   ///        file.

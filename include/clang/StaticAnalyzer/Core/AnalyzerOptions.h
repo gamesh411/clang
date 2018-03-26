@@ -158,6 +158,7 @@ public:
   unsigned ShowEnabledCheckerList : 1;
   unsigned AnalyzeAll : 1;
   unsigned AnalyzerDisplayProgress : 1;
+  unsigned AnalyzerDisplayCTUProgress : 1;
   unsigned AnalyzeNestedBlocks : 1;
 
   /// The flag regulates if we should eagerly assume evaluations of
@@ -699,6 +700,7 @@ public:
   /// Determines where the coverage info should be dumped to. The coverage
   /// information is recorded on the basic block level granularity.
   StringRef coverageExportDir();
+
 };
   
 using AnalyzerOptionsRef = IntrusiveRefCntPtr<AnalyzerOptions>;

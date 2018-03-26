@@ -300,6 +300,8 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.InlineMaxStackDepth =
       getLastArgIntValue(Args, OPT_analyzer_inline_max_stack_depth,
                          Opts.InlineMaxStackDepth, Diags);
+  Opts.AnalyzerDisplayCTUProgress =
+      Args.hasArg(OPT_analyzer_display_ctu_progress);
 
   Opts.CheckersControlList.clear();
   for (const Arg *A :

@@ -162,7 +162,8 @@ CrossTranslationUnitContext::findFunctionInDeclContext(const DeclContext *DC,
 llvm::Expected<const FunctionDecl *>
 CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
                                                   StringRef CrossTUDir,
-                                                  StringRef IndexName) {
+                                                  StringRef IndexName,
+                                                  bool DisplayCTUProgress) {
   assert(!FD->hasBody() && "FD has a definition in current translation unit!");
   const std::string LookupFnName = getLookupName(FD);
   if (LookupFnName.empty())
@@ -178,6 +179,11 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
         index_error_code::failed_to_get_external_ast);
   assert(&Unit->getFileManager() ==
          &Unit->getASTContext().getSourceManager().getFileManager());
+
+  if (DisplayCTUProgress) {
+    llvm::errs() << "ANALYZE (CTU loaded AST for source file): "
+                 << Unit->getMainFileName() << "\n";
+  }
 
   TranslationUnitDecl *TU = Unit->getASTContext().getTranslationUnitDecl();
   if (const FunctionDecl *ResultDecl =
