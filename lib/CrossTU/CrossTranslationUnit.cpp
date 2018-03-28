@@ -69,11 +69,12 @@ STATISTIC(NumNoUnit, "The # of getCTUDefinition NoUnit");
 STATISTIC(
     NumNotInOtherTU,
     "The # of getCTUDefinition called but the function is not in other TU");
-STATISTIC(NumIterateNotFound, "The # of iteration not found");
 STATISTIC(NumGetCTUSuccess, "The # of getCTUDefinition successfully return the "
                             "requested function's body");
 STATISTIC(NumUnsupportedNodeFound, "The # of imports when the ASTImporter "
                                    "encountered an unsupported AST Node");
+STATISTIC(NumTripleMismatch, "The # of triple mismatches");
+STATISTIC(NumLangMismatch, "The # of language mismatches");
 
 // FIXME: This class is will be removed after the transition to llvm::Error.
 class IndexErrorCategory : public std::error_category {
@@ -199,18 +200,23 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
                                                   StringRef IndexName,
                                                   bool DisplayCTUProgress) {
   assert(!FD->hasBody() && "FD has a definition in current translation unit!");
+  ++NumGetCTUCalled;
   const std::string LookupFnName = getLookupName(FD);
   if (LookupFnName.empty())
     return llvm::make_error<IndexError>(
         index_error_code::failed_to_generate_usr);
   llvm::Expected<ASTUnit *> ASTUnitOrError =
       loadExternalAST(LookupFnName, CrossTUDir, IndexName);
-  if (!ASTUnitOrError)
+  if (!ASTUnitOrError) {
+    ++NumNoUnit;
     return ASTUnitOrError.takeError();
+  }
   ASTUnit *Unit = *ASTUnitOrError;
-  if (!Unit)
+  if (!Unit) {
+    ++NumNoUnit;
     return llvm::make_error<IndexError>(
         index_error_code::failed_to_get_external_ast);
+  }
   assert(&Unit->getFileManager() ==
          &Unit->getASTContext().getSourceManager().getFileManager());
   const auto& TripleTo = Context.getTargetInfo().getTriple();
@@ -226,13 +232,16 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
     // diagnostics
     Context.getDiagnostics().Report(diag::err_ctu_incompat_triple)
         << Unit->getMainFileName() << TripleTo.str() << TripleFrom.str();
+    ++NumTripleMismatch;
     return llvm::make_error<IndexError>(index_error_code::triple_mismatch);
   }
   const auto& LangTo = Context.getLangOpts();
   const auto& LangFrom = Unit->getASTContext().getLangOpts();
   // FIXME: Currenty we do not support the across languages.
-  if (LangTo.CPlusPlus != LangFrom.CPlusPlus)
+  if (LangTo.CPlusPlus != LangFrom.CPlusPlus) {
+    ++NumLangMismatch;
     return llvm::make_error<IndexError>(index_error_code::lang_mismatch);
+  }
 
   if (DisplayCTUProgress) {
     llvm::errs() << "ANALYZE (CTU loaded AST for source file): "
@@ -289,8 +298,10 @@ llvm::Expected<ASTUnit *> CrossTranslationUnitContext::loadExternalAST(
     }
 
     auto It = FunctionFileMap.find(LookupName);
-    if (It == FunctionFileMap.end())
+    if (It == FunctionFileMap.end()) {
+      ++NumNotInOtherTU;
       return llvm::make_error<IndexError>(index_error_code::missing_definition);
+    }
     StringRef ASTFileName = It->second;
     auto ASTCacheEntry = FileASTUnitMap.find(ASTFileName);
     if (ASTCacheEntry == FileASTUnitMap.end()) {
@@ -331,6 +342,7 @@ CrossTranslationUnitContext::importDefinition(const FunctionDecl *FD) {
   assert(ToDecl);
   assert(ToDecl->hasBody());
   assert(FD->hasBody() && "Functions already imported should have body.");
+  ++NumGetCTUSuccess;
   return ToDecl;
 }
 
