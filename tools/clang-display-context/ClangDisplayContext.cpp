@@ -27,6 +27,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
 
 #include <regex>
@@ -57,7 +58,9 @@ public:
       for (unsigned i = 0; i != Lines.size(); ++i) {
         Line = Lines[i];
         Column = Columns[i];
+        setIssueStringToDefault();
         handleDecl(Ctx.getTranslationUnitDecl());
+        outs() << IssueString << "\n";
       }
     }
   }
@@ -67,11 +70,13 @@ private:
   bool checkIfInteresting(const T *N);
   void handleDecl(const Decl *D);
   void handleStmt(const Stmt *S);
-  void setEnclosingDecl(const Decl *D);
-  void writeIssueString(const std::string &S);
+  bool setEnclosingDecl(const Decl *D);
+  void setIssueString(const std::string &S);
+  void setIssueStringToDefault();
   
   ASTContext &Ctx;
   FullSourceLoc IssueLoc;
+  std::string IssueString;
   const Decl *EnclosingDecl;
 
   unsigned Line;
@@ -118,19 +123,18 @@ void DisplayContextConsumer::handleDecl(const Decl *D) {
     }
   }
   
-  setEnclosingDecl(D);
+  if (!setEnclosingDecl(D))
+    return;
+
   IssueLoc = Ctx.getFullLoc(D->getLocation()).getExpansionLoc();
   
   handleStmt(D->getBody());
   
-  if (!IssueLoc.isValid() || IssueLoc.getExpansionLineNumber() != Line) {
-    outs() << "Line " << Line << " and column " << Column
-           << " does not specify an issue. \n";
+  if (!IssueLoc.isValid() || IssueLoc.getExpansionLineNumber() != Line)
     return;
-  }
 
-  writeIssueString(GetIssueString(Ctx.getSourceManager(), IssueLoc, "",
-                                  "", EnclosingDecl, Ctx.getLangOpts()));
+  setIssueString(GetIssueString(Ctx.getSourceManager(), IssueLoc, "",
+                                "", EnclosingDecl, Ctx.getLangOpts()));
 }
 
 void DisplayContextConsumer::handleStmt(const Stmt *S) {
@@ -146,7 +150,7 @@ void DisplayContextConsumer::handleStmt(const Stmt *S) {
     handleStmt(Child);
 }
 
-void DisplayContextConsumer::setEnclosingDecl(const Decl *D) {
+bool DisplayContextConsumer::setEnclosingDecl(const Decl *D) {
   // If the issue is located in a ValueDecl which is not
   // a FunctionDecl, traverse up until the enclosing context is found.
   // This function aims to solve issues especially with VarDecls.
@@ -154,17 +158,25 @@ void DisplayContextConsumer::setEnclosingDecl(const Decl *D) {
     D = dyn_cast<Decl>(D->getDeclContext());
   }
   EnclosingDecl = D;
+  return EnclosingDecl->getLocation().isValid();
 }
 
-void DisplayContextConsumer::writeIssueString(const std::string &SAIssue) {
+void DisplayContextConsumer::setIssueString(const std::string &SAIssue) {
   // Since Location is provided as a range, the IssueString from Clang SA
   // has to be modified by replacing the column number, and removing
   // the first and last '$' delimeters (CheckerName and BugType not provided).
   // Original function definition is in lib/StaticAnalyzer/Core/IssueHash.cpp,
   // if that changes, this function might not provide satisfactory results.
-  outs() << std::regex_replace(SAIssue.substr(1, SAIssue.size() - 2),
+  IssueString = std::regex_replace(SAIssue.substr(1, SAIssue.size() - 2),
                                    std::regex(R"(\$\d+\$)"),
-                                   "$$" + Twine(Column).str() + "$$") << "\n";
+                                   "$$" + Twine(Column).str() + "$$");
+}
+
+void DisplayContextConsumer::setIssueStringToDefault() {
+  IssueString.clear();
+  raw_string_ostream IS(IssueString);
+  IS << "Line " << Line << " and column "
+     << Column << " do not specify an issue.";
 }
 
 class DisplayContextAction : public ASTFrontendAction {
