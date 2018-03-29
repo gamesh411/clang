@@ -43,5 +43,5 @@
 
 // CHECK-INVALID-LINE: clang-display-context: for the -line option: '-1' value invalid for uint argument!
 // CHECK-INVALID-COL: clang-display-context: for the -column option: '-1' value invalid for uint argument!
-// CHECK-INVALID: Line {{[0-9]+}} and column {{[0-9]+}} does not specify an issue.
+// CHECK-INVALID: Line {{[0-9]+}} and column {{[0-9]+}} do not specify an issue.
 
