@@ -419,15 +419,15 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
   cross_tu::CrossTranslationUnitContext &CTUCtx =
       *Engine->getCrossTranslationUnitContext();
   llvm::Expected<const FunctionDecl *> CTUDeclOrError =
-      CTUCtx.getCrossTUDefinition(FD, Opts.getCTUDir(),
-          Opts.getCTUIndexName(), Opts.AnalyzerDisplayCTUProgress);
+      CTUCtx.getCrossTUDefinition(FD, Opts.getCTUDir(), Opts.getCTUIndexName(),
+                                  Opts.AnalyzerDisplayCTUProgress);
 
   if (!CTUDeclOrError) {
     handleAllErrors(CTUDeclOrError.takeError(),
                     [&](const cross_tu::IndexError &IE) {
                       CTUCtx.emitCrossTUDiagnostics(IE);
                     });
-    return {};
+    return RuntimeDefinition();
   }
 
   return RuntimeDefinition(*CTUDeclOrError);

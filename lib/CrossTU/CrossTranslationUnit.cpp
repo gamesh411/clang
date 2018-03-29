@@ -199,6 +199,7 @@ CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
                                                   StringRef CrossTUDir,
                                                   StringRef IndexName,
                                                   bool DisplayCTUProgress) {
+  assert(FD && "FD is missing, bad call to this function!");
   assert(!FD->hasBody() && "FD has a definition in current translation unit!");
   ++NumGetCTUCalled;
   const std::string LookupFnName = getLookupName(FD);
