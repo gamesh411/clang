@@ -1301,7 +1301,7 @@ TEST(ImportExpr, DependentNameType) {
   MatchVerifier<Decl> Verifier;
   testImport("template <typename T> struct declToImport {"
              "typedef typename T::type dependent_name;"
-             "},",
+             "};",
              Lang_CXX11, "", Lang_CXX11, Verifier,
              classTemplateDecl(has(cxxRecordDecl(
                  has(typedefDecl(has(dependentNameType())))))));
