@@ -4375,11 +4375,16 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
 
         if (IsStructuralMatch(D, FoundTemplate)) {
           // The class templates structurally match; call it the same template.
+          // We found a forward declaration but the class to be imported has a
+          // definition.
+          if (D->isThisDeclarationADefinition() &&
+              !FoundTemplate->isThisDeclarationADefinition())
+            continue;
 
-          Importer.Imported(D->getTemplatedDecl(),
-                            FoundTemplate->getTemplatedDecl());
-          return Importer.Imported(D, FoundTemplate);
-        }
+          Importer.MapImported(D->getTemplatedDecl(),
+                               FoundTemplate->getTemplatedDecl());
+          return Importer.MapImported(D, FoundTemplate);
+        }         
       }
 
       ConflictingDecls.push_back(FoundDecl);
