@@ -1272,17 +1272,6 @@ void ASTNodeImporter::ImportDeclContext(DeclContext *FromDC, bool ForceImport,
 }
 
 static void setTypedefNameForAnonDecl(TagDecl *From, TagDecl *To,
-                                      ASTImporter &Importer) {
-  if (TypedefNameDecl *FromTypedef = From->getTypedefNameForAnonDecl()) {
-    auto *ToTypedef =
-      cast_or_null<TypedefNameDecl>(Importer.Import(FromTypedef));
-    assert (ToTypedef && "Failed to import typedef of an anonymous structure");
-
-    To->setTypedefNameForAnonDecl(ToTypedef);
-  }
-}
-
-static void setTypedefNameForAnonDecl(TagDecl *From, TagDecl *To,
                                ASTImporter &Importer) {
   if (TypedefNameDecl *FromTypedef = From->getTypedefNameForAnonDecl()) {
     auto *ToTypedef =
@@ -1932,7 +1921,7 @@ Decl *ASTNodeImporter::VisitTypedefNameDecl(TypedefNameDecl *D, bool IsAlias) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
       if (auto *FoundTypedef =
-              dyn_cast<TypedefNameDecl>(FoundDecls[I])) {
+              dyn_cast<TypedefNameDecl>(FoundDecl)) {
         if (Importer.IsStructurallyEquivalent(
                 D->getUnderlyingType(), FoundTypedef->getUnderlyingType())) {
           QualType OriginalUT = D->getUnderlyingType();
@@ -2235,7 +2224,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
 
-      Decl *Found = FoundDecls[I];
+      Decl *Found = FoundDecl;
       if (auto *Typedef = dyn_cast<TypedefNameDecl>(Found)) {
         if (const auto *Tag = Typedef->getUnderlyingType()->getAs<TagType>())
           Found = Tag->getDecl();
@@ -2604,7 +2593,7 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
         continue;
 
       if (!FromFT) {
-        if (auto *FoundFunction = dyn_cast<FunctionDecl>(FoundDecls[I])) {
+        if (auto *FoundFunction = dyn_cast<FunctionDecl>(FoundDecl)) {
           if (FoundFunction->hasExternalFormalLinkage() &&
               D->hasExternalFormalLinkage()) {
             if (IsStructuralMatch(D, FoundFunction)) {
@@ -2631,10 +2620,10 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
           }
         }
 
-        ConflictingDecls.push_back(FoundDecls[I]);
+        ConflictingDecls.push_back(FoundDecl);
       } else {
         if (auto *FoundFunction =
-            dyn_cast<FunctionTemplateDecl>(FoundDecls[I])) {
+            dyn_cast<FunctionTemplateDecl>(FoundDecl)) {
           if (FoundFunction->hasExternalFormalLinkage() &&
               FromFT->hasExternalFormalLinkage()) {
             if (IsStructuralMatch(FromFT, FoundFunction)) {
@@ -4490,13 +4479,6 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
         }
 
         if (IsStructuralMatch(D, FoundTemplate)) {
-          // The class templates structurally match; call it the same template.
-          // We found a forward declaration but the class to be imported has a
-          // definition.
-          if (D->isThisDeclarationADefinition() &&
-              !FoundTemplate->isThisDeclarationADefinition())
-            continue;
-
           Importer.MapImported(D->getTemplatedDecl(),
                                FoundTemplate->getTemplatedDecl());
           return Importer.MapImported(D, FoundTemplate);

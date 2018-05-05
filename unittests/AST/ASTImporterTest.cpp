@@ -106,7 +106,7 @@ testImport(const std::string &FromCode, const ArgVector &FromArgs,
   if (FoundNodes.size() == 0)
     return testing::AssertionFailure() << "No declarations were found!";
 
-  if (FoundDecls.size() > 1)
+  if (FoundNodes.size() > 1)
     return testing::AssertionFailure() << "Multiple declarations were found!";
 
   auto ToImport = selectFirst<NodeType>(DeclToImportID, FoundNodes);

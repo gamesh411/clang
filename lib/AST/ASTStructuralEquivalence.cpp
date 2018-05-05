@@ -1305,22 +1305,6 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
 }
 
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
-                                     FriendDecl *D1, FriendDecl *D2) {
-  if (D1->getFriendType() && D2->getFriendType()) {
-    if (!::IsStructurallyEquivalent(Context,
-                                    D1->getFriendType()->getType(),
-                                    D2->getFriendType()->getType()))
-      return false;
-  } else if (D1->getFriendDecl() && D2->getFriendDecl()) {
-    if (!::IsStructurallyEquivalent(Context, D1->getFriendDecl(),
-                                    D2->getFriendDecl()))
-      return false;
-  }
-
-  return true;
-}
-
-static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      FunctionDecl *D1, FunctionDecl *D2) {
   if (!::IsStructurallyEquivalent(Context, D1->getType(), D2->getType()))
     return false;
@@ -1381,15 +1365,6 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     return IsStructurallyEquivalent(Context, D1->getFriendDecl(),
                                     D2->getFriendDecl());
   return false;
-}
-
-static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
-                                     FunctionDecl *D1, FunctionDecl *D2) {
-  // FIXME: Consider checking for function attributes as well.
-  if (!IsStructurallyEquivalent(Context, D1->getType(), D2->getType()))
-    return false;
-
-  return true;
 }
 
 /// Determine structural equivalence of two declarations.
