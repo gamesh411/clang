@@ -1929,10 +1929,6 @@ TEST_P(
                     .match(ToTU, classTemplateSpecializationDecl()));
 }
 
-INSTANTIATE_TEST_CASE_P(
-    ParameterizedTests, ASTImporterTestBase,
-    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
-
 struct ImportFunctions : ASTImporterTestBase {};
 
 TEST_P(ImportFunctions,
@@ -2300,10 +2296,6 @@ TEST_P(ImportFunctions, InClassProtoAndOutOfClassDef_ImportingDef) {
   EXPECT_TRUE(To1->doesThisDeclarationHaveABody());
   EXPECT_EQ(To1->getPreviousDecl(), To0);
 }
-
-INSTANTIATE_TEST_CASE_P(
-    ParameterizedTests, ImportFunctions,
-    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
 
 AST_MATCHER_P(TagDecl, hasTypedefForAnonDecl, Matcher<TypedefNameDecl>,
       InnerMatcher) {
@@ -2715,10 +2707,6 @@ EXPECT_TRUE(ToD1->isInIdentifierNamespace(Decl::IDNS_Ordinary));
 EXPECT_TRUE(ToD1->isInIdentifierNamespace(Decl::IDNS_OrdinaryFriend));
 }
 
-INSTANTIATE_TEST_CASE_P(
-ParameterizedTests, ImportFriendFunctions,
-::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
-
 TEST_P(ASTImporterTestBase, OmitVAListTag) {
 Decl *From, *To;
 std::tie(From, To) =
@@ -2837,10 +2825,6 @@ TEST_P(CanonicalRedeclChain, ShouldBeSameForAllDeclInTheChain) {
   EXPECT_THAT(RedeclsD0, ::testing::ContainerEq(RedeclsD1));
   EXPECT_THAT(RedeclsD1, ::testing::ContainerEq(RedeclsD2));
 }
-
-INSTANTIATE_TEST_CASE_P(
-ParameterizedTests, CanonicalRedeclChain,
-::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
 
 // Note, this test case is automatically reduced from Xerces code.
 TEST_P(ASTImporterTestBase, UsingShadowDeclShouldImportTheDeclOnlyOnce) {
@@ -2982,9 +2966,6 @@ TEST_P(DeclContextTest, removeDeclOfClassTemplateSpecialization) {
   EXPECT_FALSE(NS->containsDecl(Spec));
 }
 
-INSTANTIATE_TEST_CASE_P(
-    ParameterizedTests, DeclContextTest,
-    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
 
 TEST_P(ASTImporterTestBase, ImportDefinitionOfClassTemplateAfterFwdDecl) {
   {
@@ -3018,6 +2999,22 @@ TEST_P(ASTImporterTestBase, ImportDefinitionOfClassTemplateAfterFwdDecl) {
     EXPECT_TRUE(ToCTD->isThisDeclarationADefinition());
   }
 }
+
+INSTANTIATE_TEST_CASE_P(
+    ParameterizedTests, ASTImporterTestBase,
+    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
+
+INSTANTIATE_TEST_CASE_P(
+    ParameterizedTests, ImportFunctions,
+    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
+
+INSTANTIATE_TEST_CASE_P(
+    ParameterizedTests, ImportFriendFunctions,
+    ::testing::Values(ArgVector(), ArgVector{"-fdelayed-template-parsing"}),);
+
+INSTANTIATE_TEST_CASE_P(
+    ParameterizedTests, CanonicalRedeclChain,
+    ::testing::Values(ArgVector()),);
 
 } // end namespace ast_matchers
 } // end namespace clang
