@@ -5517,6 +5517,7 @@ Stmt *ASTNodeImporter::VisitObjCAutoreleasePoolStmt
 Expr *ASTNodeImporter::VisitExpr(Expr *E) {
   Importer.FromDiag(E->getLocStart(), diag::err_unsupported_ast_node)
     << E->getStmtClassName();
+  Importer.setEncounteredUnsupportedNode(true);
   return nullptr;
 }
 
