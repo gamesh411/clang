@@ -436,6 +436,7 @@ namespace clang {
     Expr *VisitCallExpr(CallExpr *E);
     Expr *VisitLambdaExpr(LambdaExpr *LE);
     Expr *VisitInitListExpr(InitListExpr *E);
+    Expr *VisitCXXStdInitializerListExpr(CXXStdInitializerListExpr *E);
     Expr *VisitArrayInitLoopExpr(ArrayInitLoopExpr *E);
     Expr *VisitArrayInitIndexExpr(ArrayInitIndexExpr *E);
     Expr *VisitCXXDefaultInitExpr(CXXDefaultInitExpr *E);
@@ -994,25 +995,6 @@ QualType ASTNodeImporter::VisitElaboratedType(const ElaboratedType *T) {
   return Importer.getToContext().getElaboratedType(T->getKeyword(),
                                                    ToQualifier, ToNamedType,
                                                    OwnedTagDecl);
-}
-
-QualType ASTNodeImporter::VisitDependentNameType(const DependentNameType *T) {
-  NestedNameSpecifier *NNS = Importer.Import(T->getQualifier());
-  if (!NNS && T->getQualifier())
-    return QualType();
-
-  IdentifierInfo *Name = Importer.Import(T->getIdentifier());
-  if (!Name && T->getIdentifier())
-    return QualType();
-
-  QualType Canon = (T == T->getCanonicalTypeInternal().getTypePtr())
-                       ? QualType()
-                       : Importer.Import(T->getCanonicalTypeInternal());
-  if (!Canon.isNull())
-    Canon = Canon.getCanonicalType();
-
-  return Importer.getToContext().getDependentNameType(T->getKeyword(), NNS,
-                                                      Name, Canon);
 }
 
 QualType ASTNodeImporter::VisitPackExpansionType(const PackExpansionType *T) {
@@ -6521,76 +6503,6 @@ Expr *ASTNodeImporter::VisitMemberExpr(MemberExpr *E) {
                             E->getValueKind(), E->getObjectKind());
 }
 
-Expr *
-ASTNodeImporter::VisitDependentScopeDeclRefExpr(DependentScopeDeclRefExpr *E) {
-  DeclarationName Name = Importer.Import(E->getDeclName());
-  if (!E->getDeclName().isEmpty() && Name.isEmpty())
-    return nullptr;
-  DeclarationNameInfo NameInfo(Name, Importer.Import(E->getExprLoc()));
-
-  ImportDeclarationNameLoc(E->getNameInfo(), NameInfo);
-
-  TemplateArgumentListInfo ToTAInfo(Importer.Import(E->getLAngleLoc()),
-                                    Importer.Import(E->getRAngleLoc()));
-  TemplateArgumentListInfo *ResInfo = nullptr;
-  if (E->hasExplicitTemplateArgs()) {
-    for (const auto &FromLoc : E->template_arguments()) {
-      if (auto ToTALoc = ImportTemplateArgumentLoc(FromLoc))
-        ToTAInfo.addArgument(*ToTALoc);
-      else
-        return nullptr;
-    }
-    ResInfo = &ToTAInfo;
-  }
-
-  return DependentScopeDeclRefExpr::Create(
-      Importer.getToContext(), Importer.Import(E->getQualifierLoc()),
-      Importer.Import(E->getTemplateKeywordLoc()), NameInfo, ResInfo);
-}
-
-Expr *ASTNodeImporter::VisitUnresolvedMemberExpr(UnresolvedMemberExpr *E) {
-  DeclarationName Name = Importer.Import(E->getName());
-  if(!E->getName().isEmpty() && Name.isEmpty())
-    return nullptr;
-  DeclarationNameInfo NameInfo(Name, Importer.Import(E->getNameLoc()));
-  // Import additional name location/type info.
-  ImportDeclarationNameLoc(E->getNameInfo(), NameInfo);
-
-  QualType BaseType = Importer.Import(E->getType());
-  if (!E->getType().isNull() && BaseType.isNull())
-    return nullptr;
-
-  UnresolvedSet<8> ToDecls;
-  for (Decl *D : E->decls()) {
-    if (NamedDecl * To = cast_or_null<NamedDecl>(Importer.Import(D)))
-      ToDecls.addDecl(To);
-    else
-      return nullptr;
-  }
-
-  TemplateArgumentListInfo ToTAInfo;
-  TemplateArgumentListInfo *ResInfo = nullptr;
-  if (E->hasExplicitTemplateArgs()) {
-    if (ImportTemplateArgumentListInfo(E->template_arguments(), ToTAInfo))
-      return nullptr;
-    ResInfo = &ToTAInfo;
-  }
-
-  Expr *BaseE = E->isImplicitAccess() ? nullptr : Importer.Import(E->getBase());
-  if (!BaseE && !E->isImplicitAccess() && E->getBase()) {
-    return nullptr;
-  }
-
-  return UnresolvedMemberExpr::Create(
-        Importer.getToContext(), E->hasUnresolvedUsing(), BaseE, BaseType,
-        E->isArrow(), Importer.Import(E->getOperatorLoc()),
-        Importer.Import(E->getQualifierLoc()),
-        Importer.Import(E->getTemplateKeywordLoc()), NameInfo,
-        ResInfo, ToDecls.begin(), ToDecls.end());
-}
-
-
-
 Expr *ASTNodeImporter::VisitCXXPseudoDestructorExpr(
     CXXPseudoDestructorExpr *E) {
   Expr *BaseE = Importer.Import(E->getBase());
@@ -6923,6 +6835,19 @@ Expr *ASTNodeImporter::VisitInitListExpr(InitListExpr *ILE) {
   To->setInstantiationDependent(ILE->isInstantiationDependent());
 
   return To;
+}
+
+Expr *ASTNodeImporter::VisitCXXStdInitializerListExpr(
+    CXXStdInitializerListExpr *E) {
+  QualType T = Importer.Import(E->getType());
+  if (T.isNull())
+    return nullptr;
+
+  Expr *SE = Importer.Import(E->getSubExpr());
+  if (!SE)
+    return nullptr;
+
+  return new (Importer.getToContext()) CXXStdInitializerListExpr(T, SE);
 }
 
 Expr *ASTNodeImporter::VisitArrayInitLoopExpr(ArrayInitLoopExpr *E) {

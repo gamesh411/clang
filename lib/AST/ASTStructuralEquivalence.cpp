@@ -460,11 +460,6 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                         OrigProto2->getExceptionType(I)))
             return false;
         }
-      } else if (Spec1 == EST_ComputedNoexcept) {
-        if (!IsStructurallyEquivalent(Context,
-                                      OrigProto1->getNoexceptExpr(),
-                                      OrigProto2->getNoexceptExpr()))
-          return false;
       }
     }
 
@@ -1212,7 +1207,7 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     }
 
     if (!IsStructurallyEquivalent(Context, Params1->getParam(I),
-                                  Params2->getParam(I))) {
+                                  Params2->getParam(I)))
       return false;
   }
 
@@ -1351,22 +1346,6 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   return true;
 }
 
-static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
-                                     FriendDecl *D1, FriendDecl *D2) {
-  if ((D1->getFriendType() && D2->getFriendDecl()) ||
-      (D1->getFriendDecl() && D2->getFriendType())) {
-      return false;
-  }
-  if (D1->getFriendType() && D2->getFriendType())
-    return IsStructurallyEquivalent(Context,
-                                    D1->getFriendType()->getType(),
-                                    D2->getFriendType()->getType());
-  if (D1->getFriendDecl() && D2->getFriendDecl())
-    return IsStructurallyEquivalent(Context, D1->getFriendDecl(),
-                                    D2->getFriendDecl());
-  return false;
-}
-
 /// Determine structural equivalence of two declarations.
 static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      Decl *D1, Decl *D2) {
@@ -1387,6 +1366,22 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   EquivToD1 = D2->getCanonicalDecl();
   Context.DeclsToCheck.push_back(D1->getCanonicalDecl());
   return true;
+}
+
+static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
+                                     FriendDecl *D1, FriendDecl *D2) {
+  if ((D1->getFriendType() && D2->getFriendDecl()) ||
+      (D1->getFriendDecl() && D2->getFriendType())) {
+      return false;
+  }
+  if (D1->getFriendType() && D2->getFriendType())
+    return IsStructurallyEquivalent(Context,
+                                    D1->getFriendType()->getType(),
+                                    D2->getFriendType()->getType());
+  if (D1->getFriendDecl() && D2->getFriendDecl())
+    return IsStructurallyEquivalent(Context, D1->getFriendDecl(),
+                                    D2->getFriendDecl());
+  return false;
 }
 
 DiagnosticBuilder StructuralEquivalenceContext::Diag1(SourceLocation Loc,
