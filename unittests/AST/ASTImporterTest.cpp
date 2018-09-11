@@ -17,6 +17,7 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Tooling/Tooling.h"
+#include "clang/AST/DeclContextInternals.h"
 
 #include "DeclMatcher.h"
 #include "Language.h"
@@ -3023,6 +3024,35 @@ TEST_P(ASTImporterTestBase, TypeForDeclShouldBeSet) {
   EXPECT_EQ(Imported1->getTypeForDecl(), Imported2->getTypeForDecl());
 }
 
+TEST_P(ASTImporterTestBase,
+       TypeForDeclShouldBeSetInTemplated) {
+  Decl *FromTU0 = getTuDecl(
+      R"(
+      class X {
+        class Y;
+      };
+      class X::Y {
+        template <typename T>
+        friend class F; // The decl context of F is the global namespace.
+      };
+      )",
+      Lang_CXX, "input0.cc");
+  auto *Fwd = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU0, classTemplateDecl(hasName("F")));
+  auto *Imported0 = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
+  Decl *FromTU1 = getTuDecl(
+      R"(
+      template <typename T>
+      class F {};
+      )",
+      Lang_CXX, "input1.cc");
+  auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU1, classTemplateDecl(hasName("F")));
+  auto *Imported1 = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_EQ(Imported0->getTemplatedDecl()->getTypeForDecl(),
+            Imported1->getTemplatedDecl()->getTypeForDecl());
+}
+
 TEST_P(ASTImporterTestBase, DeclsFromFriendsShouldBeInRedeclChains2) {
   Decl *From, *To;
   std::tie(From, To) =
@@ -4032,6 +4062,40 @@ TEST_P(DeclContextTest, removeDeclOfClassTemplateSpecialization) {
   EXPECT_FALSE(NS->containsDecl(Spec));
 }
 
+TEST_P(DeclContextTest,
+       removeDeclShouldNotFailEvenIfWeHaveExternalVisibleStorage) {
+  Decl *TU = getTuDecl("extern int A; int A;", Lang_CXX);
+  auto *A0 = FirstDeclMatcher<VarDecl>().match(TU, varDecl(hasName("A")));
+  auto *A1 = LastDeclMatcher<VarDecl>().match(TU, varDecl(hasName("A")));
+
+  // Investigate the list.
+  auto *DC = A0->getDeclContext();
+  ASSERT_TRUE(DC->containsDecl(A0));
+  ASSERT_TRUE(DC->containsDecl(A1));
+
+  // Investigate the lookup table.
+  auto *Map = DC->getLookupPtr();
+  ASSERT_TRUE(Map);
+  auto I = Map->find(A0->getDeclName());
+  ASSERT_NE(I, Map->end());
+  StoredDeclsList &L = I->second;
+  // The lookup table contains the most recent decl of A.
+  ASSERT_NE(L.getAsDecl(), A0);
+  ASSERT_EQ(L.getAsDecl(), A1);
+
+  ASSERT_TRUE(L.getAsDecl());
+  // Simulate the private function DeclContext::reconcileExternalVisibleStorage.
+  // The point here is to have a Vec with only one element, which is not the
+  // one we are going to delete from the DC later.
+  L.setHasExternalDecls();
+  ASSERT_TRUE(L.getAsVector());
+  ASSERT_EQ(1u, L.getAsVector()->size());
+
+  // This asserts in the old implementation.
+  DC->removeDecl(A0);
+  EXPECT_FALSE(DC->containsDecl(A0));
+}
+
 struct ImportVariables : ASTImporterTestBase {};
 
 TEST_P(ImportVariables, ImportOfOneDeclBringsInTheWholeChain) {
@@ -4120,6 +4184,97 @@ TEST_P(ImportVariables, InitAndDefinitionAreInTheFromContext) {
   EXPECT_TRUE(ImportedD->getDefinition());
 }
 
+struct ImportFriendClasses : ASTImporterTestBase {};
+
+TEST_P(ImportFriendClasses,
+       ImportOfClassTemplateDefinitionShouldConnectToFwdFriend) {
+  Decl *ToTU = getToTuDecl(
+      R"(
+      class X {
+        class Y;
+      };
+      class X::Y {
+        template <typename T>
+        friend class F; // The decl context of F is the global namespace.
+      };
+      )",
+      Lang_CXX);
+  auto *ToDecl = FirstDeclMatcher<ClassTemplateDecl>().match(
+      ToTU, classTemplateDecl(hasName("F")));
+  Decl *FromTU = getTuDecl(
+      R"(
+      template <typename T>
+      class F {};
+      )",
+      Lang_CXX, "input0.cc");
+  auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU, classTemplateDecl(hasName("F")));
+  auto *Imported = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_TRUE(Imported->getPreviousDecl());
+  EXPECT_EQ(ToDecl, Imported->getPreviousDecl());
+  EXPECT_EQ(ToDecl->getTemplatedDecl(),
+            Imported->getTemplatedDecl()->getPreviousDecl());
+}
+
+TEST_P(ImportFriendClasses,
+       ImportOfClassTemplateDefinitionAndFwdFriendShouldBeLinked) {
+  Decl *FromTU0 = getTuDecl(
+      R"(
+      class X {
+        class Y;
+      };
+      class X::Y {
+        template <typename T>
+        friend class F; // The decl context of F is the global namespace.
+      };
+      )",
+      Lang_CXX, "input0.cc");
+  auto *Fwd = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU0, classTemplateDecl(hasName("F")));
+  auto *Imported0 = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
+  Decl *FromTU1 = getTuDecl(
+      R"(
+      template <typename T>
+      class F {};
+      )",
+      Lang_CXX, "input1.cc");
+  auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU1, classTemplateDecl(hasName("F")));
+  auto *Imported1 = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_TRUE(Imported1->getPreviousDecl());
+  EXPECT_EQ(Imported0, Imported1->getPreviousDecl());
+  EXPECT_EQ(Imported0->getTemplatedDecl(),
+            Imported1->getTemplatedDecl()->getPreviousDecl());
+}
+
+TEST_P(ImportFriendClasses, ImportOfClassDefinitionAndFwdFriendShouldBeLinked) {
+  Decl *FromTU0 = getTuDecl(
+      R"(
+      class X {
+        class Y;
+      };
+      class X::Y {
+        friend class F; // The decl context of F is the global namespace.
+      };
+      )",
+      Lang_CXX, "input0.cc");
+  auto *Friend = FirstDeclMatcher<FriendDecl>().match(FromTU0, friendDecl());
+  QualType FT = Friend->getFriendType()->getType();
+  FT = FromTU0->getASTContext().getCanonicalType(FT);
+  auto *Definition = cast<TagType>(FT)->getDecl();
+  auto *Imported0 = Import(Definition, Lang_CXX);
+  Decl *FromTU1 = getTuDecl(
+      R"(
+      class F {};
+      )",
+      Lang_CXX, "input1.cc");
+  Definition = FirstDeclMatcher<CXXRecordDecl>().match(
+      FromTU1, cxxRecordDecl(hasName("F")));
+  auto *Imported1 = Import(Definition, Lang_CXX);
+  EXPECT_TRUE(Imported1->getPreviousDecl());
+  EXPECT_EQ(Imported0, Imported1->getPreviousDecl());
+}
+
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, DeclContextTest,
                         ::testing::Values(ArgVector()), );
 
@@ -4145,6 +4300,9 @@ INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFunctions,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFriendFunctions,
+                        DefaultTestValuesForRunOptions, );
+
+INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFriendClasses,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFunctionTemplateSpecializations,
