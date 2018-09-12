@@ -2282,52 +2282,28 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
         PrevDecl = FoundRecord;
 
         if (RecordDecl *FoundDef = FoundRecord->getDefinition()) {
-          if (D->isThisDeclarationADefinition()) {
-            if ((SearchName && !D->isCompleteDefinition() && !IsFriendTemplate)
-                || (D->isCompleteDefinition() &&
-                    D->isAnonymousStructOrUnion()
-                      == FoundDef->isAnonymousStructOrUnion() &&
-                    IsStructuralMatch(D, FoundDef))) {
-              // FIXME: Structural equivalence check should check for same
-              // user-defined methods.
-              Importer.MapImported(D, FoundDef);
-              if (const auto *DCXX = dyn_cast<CXXRecordDecl>(D)) {
-                auto *FoundCXX = dyn_cast<CXXRecordDecl>(FoundDef);
-                assert(FoundCXX && "Record type mismatch");
+          if (D->isThisDeclarationADefinition() &&
+              IsStructuralMatch(D, FoundDef)) {
+            // FIXME: Structural equivalence check should check for same
+            // user-defined methods.
+            Importer.MapImported(D, FoundDef);
+            if (const auto *DCXX = dyn_cast<CXXRecordDecl>(D)) {
+              auto *FoundCXX = dyn_cast<CXXRecordDecl>(FoundDef);
+              assert(FoundCXX && "Record type mismatch");
 
-                if (D->isCompleteDefinition() && !Importer.isMinimalImport())
-                  // FoundDef may not have every implicit method that D has
-                  // because implicit methods are created only if they are used.
-                  ImportImplicitMethods(DCXX, FoundCXX);
-              }
-              return FoundDef;
+              if (!Importer.isMinimalImport())
+                // FoundDef may not have every implicit method that D has
+                // because implicit methods are created only if they are used.
+                ImportImplicitMethods(DCXX, FoundCXX);
             }
+            return FoundDef;
           }
-        } else if (!D->isCompleteDefinition()) {
-          // We have a forward declaration of this type in the "From" context,
-          // we have to hook that to the redecl chain.
-          if (FoundRecord->hasExternalLexicalStorage() &&
-              !FoundRecord->isCompleteDefinition())
-            FoundRecord->getASTContext().getExternalSource()->CompleteType(FoundRecord);
-          if (D->hasExternalLexicalStorage())
-            D->getASTContext().getExternalSource()->CompleteType(D);
-            
-          if (FoundRecord->isCompleteDefinition() &&
-              D->isCompleteDefinition() &&
-              !IsStructuralMatch(D, FoundRecord))
-            continue;
-
-          if (IsFriendTemplate)
-            continue;
-
-        } else if (!SearchName) {
-          continue;
         }
       }
-      
+
       ConflictingDecls.push_back(FoundDecls[I]);
     }
-    
+
     if (!ConflictingDecls.empty() && SearchName) {
       Name = Importer.HandleNameConflict(Name, DC, IDNS,
                                          ConflictingDecls.data(), 
