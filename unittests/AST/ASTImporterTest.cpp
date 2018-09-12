@@ -1594,91 +1594,6 @@ TEST_P(
   EXPECT_TRUE(MatchVerifier<Decl>{}.match(To, Pattern));
 }
 
-TEST_P(
-    ASTImporterTestBase,
-    ImportOfFriendRecordDoesNotMergeDefinition) {
-  Decl *FromTU = getTuDecl(
-      R"(
-      class A {
-        template <int I> class F {};
-        class X {
-          template <int I> friend class F;
-        };
-      };
-      )",
-      Lang_CXX, "input0.cc");
-
-  auto *FromClass = FirstDeclMatcher<CXXRecordDecl>().match(
-      FromTU, cxxRecordDecl(hasName("F"), isDefinition()));
-  auto *FromFriendClass = LastDeclMatcher<CXXRecordDecl>().match(
-      FromTU, cxxRecordDecl(hasName("F")));
-
-  ASSERT_TRUE(FromClass);
-  ASSERT_TRUE(FromFriendClass);
-  ASSERT_NE(FromClass, FromFriendClass);
-  ASSERT_EQ(FromFriendClass->getDefinition(), FromClass);
-  ASSERT_EQ(FromFriendClass->getPreviousDecl(), FromClass);
-  ASSERT_EQ(
-      FromFriendClass->getDescribedClassTemplate()->getPreviousDecl(),
-      FromClass->getDescribedClassTemplate());
-
-  auto *ToClass = cast<CXXRecordDecl>(Import(FromClass, Lang_CXX));
-  auto *ToFriendClass = cast<CXXRecordDecl>(Import(FromFriendClass, Lang_CXX));
-
-  EXPECT_TRUE(ToClass);
-  EXPECT_TRUE(ToFriendClass);
-  EXPECT_NE(ToClass, ToFriendClass);
-  EXPECT_EQ(ToFriendClass->getDefinition(), ToClass);
-  EXPECT_EQ(ToFriendClass->getPreviousDecl(), ToClass);
-  EXPECT_EQ(
-      ToFriendClass->getDescribedClassTemplate()->getPreviousDecl(),
-      ToClass->getDescribedClassTemplate());
-}
-
-TEST_P(
-    ASTImporterTestBase,
-    ImportOfRecursiveFriendClass) {
-  Decl *FromTu = getTuDecl(
-      R"(
-      class declToImport {
-        friend class declToImport;
-      };
-      )",
-      Lang_CXX, "input.cc");
-
-  auto *FromD = FirstDeclMatcher<CXXRecordDecl>().match(
-      FromTu, cxxRecordDecl(hasName("declToImport")));
-  auto *ToD = Import(FromD, Lang_CXX);
-  auto Pattern = cxxRecordDecl(has(friendDecl()));
-  ASSERT_TRUE(MatchVerifier<Decl>{}.match(FromD, Pattern));
-  EXPECT_TRUE(MatchVerifier<Decl>{}.match(ToD, Pattern));
-}
-
-TEST_P(
-    ASTImporterTestBase,
-    ImportOfRecursiveFriendClassTemplate) {
-  Decl *FromTu = getTuDecl(
-      R"(
-      template<class A> class declToImport {
-        template<class A1> friend class declToImport;
-      };
-      )",
-      Lang_CXX, "input.cc");
-
-  auto *FromD = FirstDeclMatcher<ClassTemplateDecl>().match(
-      FromTu, classTemplateDecl());
-  auto *ToD = Import(FromD, Lang_CXX);
-  
-  auto Pattern = classTemplateDecl(has(cxxRecordDecl(has(friendDecl(has(classTemplateDecl()))))));
-  ASSERT_TRUE(MatchVerifier<Decl>{}.match(FromD, Pattern));
-  EXPECT_TRUE(MatchVerifier<Decl>{}.match(ToD, Pattern));
-  
-  auto *Class = FirstDeclMatcher<ClassTemplateDecl>().match(ToD, classTemplateDecl());
-  auto *Friend = FirstDeclMatcher<FriendDecl>().match(ToD, friendDecl());
-  EXPECT_NE(Friend->getFriendDecl(), Class);
-  EXPECT_EQ(Friend->getFriendDecl()->getPreviousDecl(), Class);
-}
-
 struct ImportFunctionTemplateSpecializations : ASTImporterTestBase {};
 
 TEST_P(ImportFunctionTemplateSpecializations,
@@ -2970,38 +2885,6 @@ TEST_P(ASTImporterTestBase, OmitVAListTag) {
       MatchVerifier<Decl>{}.match(To->getTranslationUnitDecl(), Pattern));
 }
 
-TEST_P(ASTImporterTestBase, ProperPrevDeclForClassTemplateDecls) {
-  auto Pattern = classTemplateSpecializationDecl(hasName("X"));
-
-  ClassTemplateSpecializationDecl *Imported1;
-  {
-    Decl *FromTU = getTuDecl("template<class T> class X;"
-                             "struct Y { friend class X<int>; };",
-                             Lang_CXX, "input0.cc");
-    auto *FromD = FirstDeclMatcher<ClassTemplateSpecializationDecl>().match(
-        FromTU, Pattern);
-
-    Imported1 = cast<ClassTemplateSpecializationDecl>(Import(FromD, Lang_CXX));
-  }
-  ClassTemplateSpecializationDecl *Imported2;
-  {
-    Decl *FromTU = getTuDecl("template<class T> class X;"
-                             "template<> class X<int>{};"
-                             "struct Z { friend class X<int>; };",
-                             Lang_CXX, "input1.cc");
-    auto *FromD = FirstDeclMatcher<ClassTemplateSpecializationDecl>().match(
-        FromTU, Pattern);
-
-    Imported2 = cast<ClassTemplateSpecializationDecl>(Import(FromD, Lang_CXX));
-  }
-
-  Decl *ToTU = ToAST->getASTContext().getTranslationUnitDecl();
-  EXPECT_EQ(DeclCounter<ClassTemplateSpecializationDecl>().match(ToTU, Pattern),
-            2u);
-  ASSERT_TRUE(Imported2->getPreviousDecl());
-  EXPECT_EQ(Imported2->getPreviousDecl(), Imported1);
-}
-
 TEST_P(ASTImporterTestBase, TypeForDeclShouldBeSet) {
   auto Pattern = cxxRecordDecl(hasName("X"));
 
@@ -3022,45 +2905,6 @@ TEST_P(ASTImporterTestBase, TypeForDeclShouldBeSet) {
 
   EXPECT_TRUE(Imported2->getPreviousDecl());
   EXPECT_EQ(Imported1->getTypeForDecl(), Imported2->getTypeForDecl());
-}
-
-TEST_P(ASTImporterTestBase,
-       TypeForDeclShouldBeSetInTemplated) {
-  Decl *FromTU0 = getTuDecl(
-      R"(
-      class X {
-        class Y;
-      };
-      class X::Y {
-        template <typename T>
-        friend class F; // The decl context of F is the global namespace.
-      };
-      )",
-      Lang_CXX, "input0.cc");
-  auto *Fwd = FirstDeclMatcher<ClassTemplateDecl>().match(
-      FromTU0, classTemplateDecl(hasName("F")));
-  auto *Imported0 = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
-  Decl *FromTU1 = getTuDecl(
-      R"(
-      template <typename T>
-      class F {};
-      )",
-      Lang_CXX, "input1.cc");
-  auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
-      FromTU1, classTemplateDecl(hasName("F")));
-  auto *Imported1 = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
-  EXPECT_EQ(Imported0->getTemplatedDecl()->getTypeForDecl(),
-            Imported1->getTemplatedDecl()->getTypeForDecl());
-}
-
-TEST_P(ASTImporterTestBase, DeclsFromFriendsShouldBeInRedeclChains2) {
-  Decl *From, *To;
-  std::tie(From, To) =
-      getImportedDecl("class declToImport {};", Lang_CXX,
-                      "class Y { friend class declToImport; };", Lang_CXX);
-  auto *Imported = cast<CXXRecordDecl>(To);
-
-  EXPECT_TRUE(Imported->getPreviousDecl());
 }
 
 struct CanonicalRedeclChain : ASTImporterTestBase {};
@@ -4185,6 +4029,162 @@ TEST_P(ImportVariables, InitAndDefinitionAreInTheFromContext) {
 }
 
 struct ImportFriendClasses : ASTImporterTestBase {};
+
+TEST_P(
+    ImportFriendClasses,
+    ImportOfFriendRecordDoesNotMergeDefinition) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      class A {
+        template <int I> class F {};
+        class X {
+          template <int I> friend class F;
+        };
+      };
+      )",
+      Lang_CXX, "input0.cc");
+
+  auto *FromClass = FirstDeclMatcher<CXXRecordDecl>().match(
+      FromTU, cxxRecordDecl(hasName("F"), isDefinition()));
+  auto *FromFriendClass = LastDeclMatcher<CXXRecordDecl>().match(
+      FromTU, cxxRecordDecl(hasName("F")));
+
+  ASSERT_TRUE(FromClass);
+  ASSERT_TRUE(FromFriendClass);
+  ASSERT_NE(FromClass, FromFriendClass);
+  ASSERT_EQ(FromFriendClass->getDefinition(), FromClass);
+  ASSERT_EQ(FromFriendClass->getPreviousDecl(), FromClass);
+  ASSERT_EQ(
+      FromFriendClass->getDescribedClassTemplate()->getPreviousDecl(),
+      FromClass->getDescribedClassTemplate());
+
+  auto *ToClass = cast<CXXRecordDecl>(Import(FromClass, Lang_CXX));
+  auto *ToFriendClass = cast<CXXRecordDecl>(Import(FromFriendClass, Lang_CXX));
+
+  EXPECT_TRUE(ToClass);
+  EXPECT_TRUE(ToFriendClass);
+  EXPECT_NE(ToClass, ToFriendClass);
+  EXPECT_EQ(ToFriendClass->getDefinition(), ToClass);
+  EXPECT_EQ(ToFriendClass->getPreviousDecl(), ToClass);
+  EXPECT_EQ(
+      ToFriendClass->getDescribedClassTemplate()->getPreviousDecl(),
+      ToClass->getDescribedClassTemplate());
+}
+
+TEST_P(
+    ImportFriendClasses,
+    ImportOfRecursiveFriendClass) {
+  Decl *FromTu = getTuDecl(
+      R"(
+      class declToImport {
+        friend class declToImport;
+      };
+      )",
+      Lang_CXX, "input.cc");
+
+  auto *FromD = FirstDeclMatcher<CXXRecordDecl>().match(
+      FromTu, cxxRecordDecl(hasName("declToImport")));
+  auto *ToD = Import(FromD, Lang_CXX);
+  auto Pattern = cxxRecordDecl(has(friendDecl()));
+  ASSERT_TRUE(MatchVerifier<Decl>{}.match(FromD, Pattern));
+  EXPECT_TRUE(MatchVerifier<Decl>{}.match(ToD, Pattern));
+}
+
+TEST_P(
+    ImportFriendClasses,
+    ImportOfRecursiveFriendClassTemplate) {
+  Decl *FromTu = getTuDecl(
+      R"(
+      template<class A> class declToImport {
+        template<class A1> friend class declToImport;
+      };
+      )",
+      Lang_CXX, "input.cc");
+
+  auto *FromD = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTu, classTemplateDecl());
+  auto *ToD = Import(FromD, Lang_CXX);
+  
+  auto Pattern = classTemplateDecl(has(cxxRecordDecl(has(friendDecl(has(classTemplateDecl()))))));
+  ASSERT_TRUE(MatchVerifier<Decl>{}.match(FromD, Pattern));
+  EXPECT_TRUE(MatchVerifier<Decl>{}.match(ToD, Pattern));
+  
+  auto *Class = FirstDeclMatcher<ClassTemplateDecl>().match(ToD, classTemplateDecl());
+  auto *Friend = FirstDeclMatcher<FriendDecl>().match(ToD, friendDecl());
+  EXPECT_NE(Friend->getFriendDecl(), Class);
+  EXPECT_EQ(Friend->getFriendDecl()->getPreviousDecl(), Class);
+}
+
+TEST_P(ImportFriendClasses, ProperPrevDeclForClassTemplateDecls) {
+  auto Pattern = classTemplateSpecializationDecl(hasName("X"));
+
+  ClassTemplateSpecializationDecl *Imported1;
+  {
+    Decl *FromTU = getTuDecl("template<class T> class X;"
+                             "struct Y { friend class X<int>; };",
+                             Lang_CXX, "input0.cc");
+    auto *FromD = FirstDeclMatcher<ClassTemplateSpecializationDecl>().match(
+        FromTU, Pattern);
+
+    Imported1 = cast<ClassTemplateSpecializationDecl>(Import(FromD, Lang_CXX));
+  }
+  ClassTemplateSpecializationDecl *Imported2;
+  {
+    Decl *FromTU = getTuDecl("template<class T> class X;"
+                             "template<> class X<int>{};"
+                             "struct Z { friend class X<int>; };",
+                             Lang_CXX, "input1.cc");
+    auto *FromD = FirstDeclMatcher<ClassTemplateSpecializationDecl>().match(
+        FromTU, Pattern);
+
+    Imported2 = cast<ClassTemplateSpecializationDecl>(Import(FromD, Lang_CXX));
+  }
+
+  Decl *ToTU = ToAST->getASTContext().getTranslationUnitDecl();
+  EXPECT_EQ(DeclCounter<ClassTemplateSpecializationDecl>().match(ToTU, Pattern),
+            2u);
+  ASSERT_TRUE(Imported2->getPreviousDecl());
+  EXPECT_EQ(Imported2->getPreviousDecl(), Imported1);
+}
+
+TEST_P(ImportFriendClasses,
+       TypeForDeclShouldBeSetInTemplated) {
+  Decl *FromTU0 = getTuDecl(
+      R"(
+      class X {
+        class Y;
+      };
+      class X::Y {
+        template <typename T>
+        friend class F; // The decl context of F is the global namespace.
+      };
+      )",
+      Lang_CXX, "input0.cc");
+  auto *Fwd = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU0, classTemplateDecl(hasName("F")));
+  auto *Imported0 = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
+  Decl *FromTU1 = getTuDecl(
+      R"(
+      template <typename T>
+      class F {};
+      )",
+      Lang_CXX, "input1.cc");
+  auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
+      FromTU1, classTemplateDecl(hasName("F")));
+  auto *Imported1 = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_EQ(Imported0->getTemplatedDecl()->getTypeForDecl(),
+            Imported1->getTemplatedDecl()->getTypeForDecl());
+}
+
+TEST_P(ImportFriendClasses, DeclsFromFriendsShouldBeInRedeclChains2) {
+  Decl *From, *To;
+  std::tie(From, To) =
+      getImportedDecl("class declToImport {};", Lang_CXX,
+                      "class Y { friend class declToImport; };", Lang_CXX);
+  auto *Imported = cast<CXXRecordDecl>(To);
+
+  EXPECT_TRUE(Imported->getPreviousDecl());
+}
 
 TEST_P(ImportFriendClasses,
        ImportOfClassTemplateDefinitionShouldConnectToFwdFriend) {
