@@ -2274,10 +2274,18 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
       }
 
       if (auto *FoundRecord = dyn_cast<RecordDecl>(Found)) {
-        if (!SearchName) {
+        // Do not emit false positive diagnostic in case of unnamed
+        // struct/union and in case of anonymous structs.  Would be false
+        // becasue there may be several anonymous/unnamed structs in a class.
+        // E.g. these are both valid:
+        //  struct A { // unnamed structs
+        //    struct { struct A *next; } entry0;
+        //    struct { struct A *next; } entry1;
+        //  };
+        //  struct X { struct { int a; }; struct { int b; }; // anon structs
+        if (!SearchName)
           if (!IsStructuralMatch(D, FoundRecord, false))
             continue;
-        }
 
         if (IsStructuralMatch(D, FoundRecord)) {
           RecordDecl *FoundDef = FoundRecord->getDefinition();

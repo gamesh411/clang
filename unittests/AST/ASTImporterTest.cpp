@@ -3298,6 +3298,65 @@ TEST_P(ASTImporterTestBase, ObjectsWithUnnamedStructType) {
   EXPECT_NE(To0->getCanonicalDecl(), To1->getCanonicalDecl());
 }
 
+TEST_P(ASTImporterTestBase, AnonymousRecords) {
+  auto *Code =
+      R"(
+      struct X {
+        struct { int a; };
+        struct { int b; };
+      };
+      )";
+  Decl *FromTU0 = getTuDecl(Code, Lang_C, "input0.c");
+
+  Decl *FromTU1 = getTuDecl(Code, Lang_C, "input1.c");
+
+  auto *X0 =
+      FirstDeclMatcher<RecordDecl>().match(FromTU0, recordDecl(hasName("X")));
+  auto *X1 =
+      FirstDeclMatcher<RecordDecl>().match(FromTU1, recordDecl(hasName("X")));
+  Import(X0, Lang_C);
+  Import(X1, Lang_C);
+
+  auto *ToTU = ToAST->getASTContext().getTranslationUnitDecl();
+  // We expect no (ODR) warning during the import.
+  EXPECT_EQ(0u, ToTU->getASTContext().getDiagnostics().getNumWarnings());
+  EXPECT_EQ(1u,
+            DeclCounter<RecordDecl>().match(ToTU, recordDecl(hasName("X"))));
+}
+
+TEST_P(ASTImporterTestBase, AnonymousRecordsReversed) {
+  Decl *FromTU0 = getTuDecl(
+      R"(
+      struct X {
+        struct { int a; };
+        struct { int b; };
+      };
+      )",
+      Lang_C, "input0.c");
+
+  Decl *FromTU1 = getTuDecl(
+      R"(
+      struct X { // reversed order
+        struct { int b; };
+        struct { int a; };
+      };
+      )",
+      Lang_C, "input1.c");
+
+  auto *X0 =
+      FirstDeclMatcher<RecordDecl>().match(FromTU0, recordDecl(hasName("X")));
+  auto *X1 =
+      FirstDeclMatcher<RecordDecl>().match(FromTU1, recordDecl(hasName("X")));
+  Import(X0, Lang_C);
+  Import(X1, Lang_C);
+
+  auto *ToTU = ToAST->getASTContext().getTranslationUnitDecl();
+  // We expect one (ODR) warning during the import.
+  EXPECT_EQ(1u, ToTU->getASTContext().getDiagnostics().getNumWarnings());
+  EXPECT_EQ(2u,
+            DeclCounter<RecordDecl>().match(ToTU, recordDecl(hasName("X"))));
+}
+
 class ImportImplicitMethods : public ASTImporterTestBase {
 public:
   static constexpr auto DefaultCode = R"(
