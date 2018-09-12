@@ -4494,7 +4494,8 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
     SmallVector<NamedDecl *, 2> FoundDecls;
     DC->getRedeclContext()->localUncachedLookup(Name, FoundDecls);
     for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
-      if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_Ordinary | Decl::IDNS_TagFriend))
+      if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_Ordinary |
+                                                  Decl::IDNS_TagFriend))
         continue;
 
       Decl *Found = FoundDecls[I];

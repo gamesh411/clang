@@ -4209,11 +4209,11 @@ TEST_P(ImportFriendClasses,
       Lang_CXX, "input0.cc");
   auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
       FromTU, classTemplateDecl(hasName("F")));
-  auto *Imported = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
-  EXPECT_TRUE(Imported->getPreviousDecl());
-  EXPECT_EQ(ToDecl, Imported->getPreviousDecl());
+  auto *ImportedDef = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_TRUE(ImportedDef->getPreviousDecl());
+  EXPECT_EQ(ToDecl, ImportedDef->getPreviousDecl());
   EXPECT_EQ(ToDecl->getTemplatedDecl(),
-            Imported->getTemplatedDecl()->getPreviousDecl());
+            ImportedDef->getTemplatedDecl()->getPreviousDecl());
 }
 
 TEST_P(ImportFriendClasses,
@@ -4231,7 +4231,7 @@ TEST_P(ImportFriendClasses,
       Lang_CXX, "input0.cc");
   auto *Fwd = FirstDeclMatcher<ClassTemplateDecl>().match(
       FromTU0, classTemplateDecl(hasName("F")));
-  auto *Imported0 = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
+  auto *ImportedFwd = cast<ClassTemplateDecl>(Import(Fwd, Lang_CXX));
   Decl *FromTU1 = getTuDecl(
       R"(
       template <typename T>
@@ -4240,11 +4240,11 @@ TEST_P(ImportFriendClasses,
       Lang_CXX, "input1.cc");
   auto *Definition = FirstDeclMatcher<ClassTemplateDecl>().match(
       FromTU1, classTemplateDecl(hasName("F")));
-  auto *Imported1 = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
-  EXPECT_TRUE(Imported1->getPreviousDecl());
-  EXPECT_EQ(Imported0, Imported1->getPreviousDecl());
-  EXPECT_EQ(Imported0->getTemplatedDecl(),
-            Imported1->getTemplatedDecl()->getPreviousDecl());
+  auto *ImportedDef = cast<ClassTemplateDecl>(Import(Definition, Lang_CXX));
+  EXPECT_TRUE(ImportedDef->getPreviousDecl());
+  EXPECT_EQ(ImportedFwd, ImportedDef->getPreviousDecl());
+  EXPECT_EQ(ImportedFwd->getTemplatedDecl(),
+            ImportedDef->getTemplatedDecl()->getPreviousDecl());
 }
 
 TEST_P(ImportFriendClasses, ImportOfClassDefinitionAndFwdFriendShouldBeLinked) {
@@ -4261,18 +4261,18 @@ TEST_P(ImportFriendClasses, ImportOfClassDefinitionAndFwdFriendShouldBeLinked) {
   auto *Friend = FirstDeclMatcher<FriendDecl>().match(FromTU0, friendDecl());
   QualType FT = Friend->getFriendType()->getType();
   FT = FromTU0->getASTContext().getCanonicalType(FT);
-  auto *Definition = cast<TagType>(FT)->getDecl();
-  auto *Imported0 = Import(Definition, Lang_CXX);
+  auto *Fwd = cast<TagType>(FT)->getDecl();
+  auto *ImportedFwd = Import(Fwd, Lang_CXX);
   Decl *FromTU1 = getTuDecl(
       R"(
       class F {};
       )",
       Lang_CXX, "input1.cc");
-  Definition = FirstDeclMatcher<CXXRecordDecl>().match(
+  auto *Definition = FirstDeclMatcher<CXXRecordDecl>().match(
       FromTU1, cxxRecordDecl(hasName("F")));
-  auto *Imported1 = Import(Definition, Lang_CXX);
-  EXPECT_TRUE(Imported1->getPreviousDecl());
-  EXPECT_EQ(Imported0, Imported1->getPreviousDecl());
+  auto *ImportedDef = Import(Definition, Lang_CXX);
+  EXPECT_TRUE(ImportedDef->getPreviousDecl());
+  EXPECT_EQ(ImportedFwd, ImportedDef->getPreviousDecl());
 }
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, DeclContextTest,
