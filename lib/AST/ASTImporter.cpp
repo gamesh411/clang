@@ -2279,11 +2279,9 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
             continue;
         }
 
-        PrevDecl = FoundRecord;
-
-        if (RecordDecl *FoundDef = FoundRecord->getDefinition()) {
-          if (D->isThisDeclarationADefinition() &&
-              IsStructuralMatch(D, FoundDef)) {
+        if (IsStructuralMatch(D, FoundRecord)) {
+          RecordDecl *FoundDef = FoundRecord->getDefinition();
+          if (D->isThisDeclarationADefinition() && FoundDef) {
             // FIXME: Structural equivalence check should check for same
             // user-defined methods.
             Importer.MapImported(D, FoundDef);
@@ -2296,8 +2294,9 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
                 // because implicit methods are created only if they are used.
                 ImportImplicitMethods(DCXX, FoundCXX);
             }
-            return FoundDef;
           }
+          PrevDecl = FoundRecord;
+          break;
         }
       }
 
