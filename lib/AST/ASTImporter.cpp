@@ -2357,9 +2357,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
     D2->setAccess(D->getAccess());
     D2->setLexicalDeclContext(LexicalDC);
 
-    if (D->getDeclContext()->containsDeclAndLoad(D))
-      DC->addDeclInternal(D2);
-    if (DC != LexicalDC && D->getLexicalDeclContext()->containsDeclAndLoad(D))
+    if (!DCXX->getDescribedClassTemplate() || DCXX->isImplicit())
       LexicalDC->addDeclInternal(D2);
 
     const bool IsFriend = D->isInIdentifierNamespace(Decl::IDNS_TagFriend);
