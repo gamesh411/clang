@@ -4087,6 +4087,305 @@ TEST_P(ImportVariables, InitAndDefinitionAreInTheFromContext) {
   EXPECT_TRUE(ImportedD->getDefinition());
 }
 
+struct ImportClasses : ASTImporterTestBase {};
+
+TEST_P(ImportClasses,
+       PrototypeShouldBeImportedAsAPrototypeWhenThereIsNoDefinition) {
+  Decl *FromTU = getTuDecl("class X;", Lang_CXX);
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto FromD =
+      FirstDeclMatcher<CXXRecordDecl>().match(FromTU, Pattern);
+
+  Decl *ImportedD = Import(FromD, Lang_CXX);
+  Decl *ToTU = ImportedD->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 1u);
+  auto ToD = LastDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedD == ToD);
+  EXPECT_FALSE(ToD->isThisDeclarationADefinition());
+}
+
+TEST_P(ImportClasses, ImportPrototypeAfterImportedPrototype) {
+  Decl *FromTU = getTuDecl("class X; class X;", Lang_CXX);
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<CXXRecordDecl>().match(FromTU, Pattern);
+  auto From1 = LastDeclMatcher<CXXRecordDecl>().match(FromTU, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 2u);
+  auto To0 = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  auto To1 = LastDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(Imported1 == To1);
+  EXPECT_FALSE(To0->isThisDeclarationADefinition());
+  EXPECT_FALSE(To1->isThisDeclarationADefinition());
+  EXPECT_EQ(To1->getPreviousDecl(), To0);
+}
+
+TEST_P(ImportClasses, DefinitionShouldBeImportedAsADefinition) {
+  Decl *FromTU = getTuDecl("class X {};", Lang_CXX);
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto *FromD =
+      FirstDeclMatcher<CXXRecordDecl>().match(FromTU, Pattern);
+
+  Decl *ImportedD = Import(FromD, Lang_CXX);
+  Decl *ToTU = ImportedD->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 1u);
+  EXPECT_TRUE(cast<CXXRecordDecl>(ImportedD)->isThisDeclarationADefinition());
+}
+
+TEST_P(ImportClasses,
+    ImportPrototypeFromDifferentTUAfterImportedPrototype) {
+  Decl *FromTU0 = getTuDecl("class X;", Lang_CXX, "input0.cc");
+  Decl *FromTU1 = getTuDecl("class X;", Lang_CXX, "input1.cc");
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<CXXRecordDecl>().match(FromTU0, Pattern);
+  auto From1 = FirstDeclMatcher<CXXRecordDecl>().match(FromTU1, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 2u);
+  auto To0 = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  auto To1 = LastDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(Imported1 == To1);
+  EXPECT_FALSE(To0->isThisDeclarationADefinition());
+  EXPECT_FALSE(To1->isThisDeclarationADefinition());
+  EXPECT_EQ(To1->getPreviousDecl(), To0);
+}
+
+TEST_P(ImportClasses, ImportDefinitions) {
+  Decl *FromTU0 = getTuDecl("class X {};", Lang_CXX, "input0.cc");
+  Decl *FromTU1 = getTuDecl("class X {};", Lang_CXX, "input1.cc");
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<CXXRecordDecl>().match(FromTU0, Pattern);
+  auto From1 = FirstDeclMatcher<CXXRecordDecl>().match(FromTU1, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(Imported0, Imported1);
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 1u);
+  auto To0 = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(To0->isThisDeclarationADefinition());
+}
+
+TEST_P(ImportClasses, ImportDefinitionThenPrototype) {
+  Decl *FromTU0 = getTuDecl("class X {};", Lang_CXX, "input0.cc");
+  Decl *FromTU1 = getTuDecl("class X;", Lang_CXX, "input1.cc");
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto FromDef = FirstDeclMatcher<CXXRecordDecl>().match(FromTU0, Pattern);
+  auto FromProto = FirstDeclMatcher<CXXRecordDecl>().match(FromTU1, Pattern);
+
+  Decl *ImportedDef = Import(FromDef, Lang_CXX);
+  Decl *ImportedProto = Import(FromProto, Lang_CXX);
+  Decl *ToTU = ImportedDef->getTranslationUnitDecl();
+
+  EXPECT_NE(ImportedDef, ImportedProto);
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 2u);
+  auto ToDef = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  auto ToProto = LastDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedDef == ToDef);
+  EXPECT_TRUE(ImportedProto == ToProto);
+  EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
+  EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
+  EXPECT_EQ(ToProto->getPreviousDecl(), ToDef);
+}
+
+TEST_P(ImportClasses, ImportPrototypeThenDefinition) {
+  Decl *FromTU0 = getTuDecl("class X;", Lang_CXX, "input0.cc");
+  Decl *FromTU1 = getTuDecl("class X {};", Lang_CXX, "input1.cc");
+  auto Pattern = cxxRecordDecl(hasName("X"), unless(isImplicit()));
+  auto FromProto = FirstDeclMatcher<CXXRecordDecl>().match(FromTU0, Pattern);
+  auto FromDef = FirstDeclMatcher<CXXRecordDecl>().match(FromTU1, Pattern);
+
+  Decl *ImportedProto = Import(FromProto, Lang_CXX);
+  Decl *ImportedDef = Import(FromDef, Lang_CXX);
+  Decl *ToTU = ImportedDef->getTranslationUnitDecl();
+
+  EXPECT_NE(ImportedDef, ImportedProto);
+  EXPECT_EQ(DeclCounter<CXXRecordDecl>().match(ToTU, Pattern), 2u);
+  auto ToProto = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  auto ToDef = LastDeclMatcher<CXXRecordDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedDef == ToDef);
+  EXPECT_TRUE(ImportedProto == ToProto);
+  EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
+  EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
+  EXPECT_EQ(ToDef->getPreviousDecl(), ToProto);
+}
+
+struct ImportClassTemplates : ASTImporterTestBase {};
+
+TEST_P(ImportClassTemplates,
+       PrototypeShouldBeImportedAsAPrototypeWhenThereIsNoDefinition) {
+  Decl *FromTU = getTuDecl("template <class T> class X;", Lang_CXX);
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto FromD = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU, Pattern);
+
+  Decl *ImportedD = Import(FromD, Lang_CXX);
+  Decl *ToTU = ImportedD->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
+  auto ToD = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedD == ToD);
+  EXPECT_FALSE(ToD->isThisDeclarationADefinition());
+  EXPECT_TRUE(ToD->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates, ImportPrototypeAfterImportedPrototype) {
+  Decl *FromTU = getTuDecl(
+      "template <class T> class X; template <class T> class X;", Lang_CXX);
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU, Pattern);
+  auto From1 = LastDeclMatcher<ClassTemplateDecl>().match(FromTU, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 2u);
+  auto To0 = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  auto To1 = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(Imported1 == To1);
+  EXPECT_FALSE(To0->isThisDeclarationADefinition());
+  EXPECT_FALSE(To1->isThisDeclarationADefinition());
+  EXPECT_EQ(To1->getPreviousDecl(), To0);
+  EXPECT_TRUE(To0->getTemplatedDecl());
+  EXPECT_TRUE(To1->getTemplatedDecl());
+  EXPECT_EQ(To1->getTemplatedDecl()->getPreviousDecl(),
+            To0->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates, DefinitionShouldBeImportedAsADefinition) {
+  Decl *FromTU = getTuDecl("template <class T> class X {};", Lang_CXX);
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto *FromD = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU, Pattern);
+
+  Decl *ImportedD = Import(FromD, Lang_CXX);
+  Decl *ToTU = ImportedD->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
+  auto ToD = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ToD->isThisDeclarationADefinition());
+  EXPECT_TRUE(ToD->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates,
+       ImportPrototypeFromDifferentTUAfterImportedPrototype) {
+  Decl *FromTU0 =
+      getTuDecl("template <class T> class X;", Lang_CXX, "input0.cc");
+  Decl *FromTU1 =
+      getTuDecl("template <class T> class X;", Lang_CXX, "input1.cc");
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU0, Pattern);
+  auto From1 = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU1, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 2u);
+  auto To0 = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  auto To1 = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(Imported1 == To1);
+  EXPECT_FALSE(To0->isThisDeclarationADefinition());
+  EXPECT_FALSE(To1->isThisDeclarationADefinition());
+  EXPECT_EQ(To1->getPreviousDecl(), To0);
+  EXPECT_TRUE(To0->getTemplatedDecl());
+  EXPECT_TRUE(To1->getTemplatedDecl());
+  EXPECT_EQ(To1->getTemplatedDecl()->getPreviousDecl(),
+            To0->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates, ImportDefinitions) {
+  Decl *FromTU0 =
+      getTuDecl("template <class T> class X {};", Lang_CXX, "input0.cc");
+  Decl *FromTU1 =
+      getTuDecl("template <class T> class X {};", Lang_CXX, "input1.cc");
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto From0 = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU0, Pattern);
+  auto From1 = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU1, Pattern);
+
+  Decl *Imported0 = Import(From0, Lang_CXX);
+  Decl *Imported1 = Import(From1, Lang_CXX);
+  Decl *ToTU = Imported0->getTranslationUnitDecl();
+
+  EXPECT_EQ(Imported0, Imported1);
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
+  auto To0 = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(Imported0 == To0);
+  EXPECT_TRUE(To0->isThisDeclarationADefinition());
+  EXPECT_TRUE(To0->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates, ImportDefinitionThenPrototype) {
+  Decl *FromTU0 =
+      getTuDecl("template <class T> class X {};", Lang_CXX, "input0.cc");
+  Decl *FromTU1 =
+      getTuDecl("template <class T> class X;", Lang_CXX, "input1.cc");
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto FromDef = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU0, Pattern);
+  auto FromProto =
+      FirstDeclMatcher<ClassTemplateDecl>().match(FromTU1, Pattern);
+
+  Decl *ImportedDef = Import(FromDef, Lang_CXX);
+  Decl *ImportedProto = Import(FromProto, Lang_CXX);
+  Decl *ToTU = ImportedDef->getTranslationUnitDecl();
+
+  EXPECT_NE(ImportedDef, ImportedProto);
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 2u);
+  auto ToDef = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  auto ToProto = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedDef == ToDef);
+  EXPECT_TRUE(ImportedProto == ToProto);
+  EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
+  EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
+  EXPECT_EQ(ToProto->getPreviousDecl(), ToDef);
+  EXPECT_TRUE(ToDef->getTemplatedDecl());
+  EXPECT_TRUE(ToProto->getTemplatedDecl());
+  EXPECT_EQ(ToProto->getTemplatedDecl()->getPreviousDecl(),
+            ToDef->getTemplatedDecl());
+}
+
+TEST_P(ImportClassTemplates, ImportPrototypeThenDefinition) {
+  Decl *FromTU0 =
+      getTuDecl("template <class T> class X;", Lang_CXX, "input0.cc");
+  Decl *FromTU1 =
+      getTuDecl("template <class T> class X {};", Lang_CXX, "input1.cc");
+  auto Pattern = classTemplateDecl(hasName("X"), unless(isImplicit()));
+  auto FromProto =
+      FirstDeclMatcher<ClassTemplateDecl>().match(FromTU0, Pattern);
+  auto FromDef = FirstDeclMatcher<ClassTemplateDecl>().match(FromTU1, Pattern);
+
+  Decl *ImportedProto = Import(FromProto, Lang_CXX);
+  Decl *ImportedDef = Import(FromDef, Lang_CXX);
+  Decl *ToTU = ImportedDef->getTranslationUnitDecl();
+
+  EXPECT_NE(ImportedDef, ImportedProto);
+  EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 2u);
+  auto ToProto = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  auto ToDef = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  EXPECT_TRUE(ImportedDef == ToDef);
+  EXPECT_TRUE(ImportedProto == ToProto);
+  EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
+  EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
+  EXPECT_EQ(ToDef->getPreviousDecl(), ToProto);
+  EXPECT_TRUE(ToProto->getTemplatedDecl());
+  EXPECT_TRUE(ToDef->getTemplatedDecl());
+  EXPECT_EQ(ToDef->getTemplatedDecl()->getPreviousDecl(),
+            ToProto->getTemplatedDecl());
+}
+
 struct ImportFriendClasses : ASTImporterTestBase {};
 
 TEST_P(
@@ -4359,6 +4658,12 @@ INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFunctions,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFriendFunctions,
+                        DefaultTestValuesForRunOptions, );
+
+INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportClasses,
+                        DefaultTestValuesForRunOptions, );
+
+INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportClassTemplates,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportFriendClasses,
