@@ -2282,7 +2282,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
         //    struct { struct A *next; } entry0;
         //    struct { struct A *next; } entry1;
         //  };
-        //  struct X { struct { int a; }; struct { int b; }; // anon structs
+        //  struct X { struct { int a; }; struct { int b; }; }; // anon structs
         if (!SearchName)
           if (!IsStructuralMatch(D, FoundRecord, false))
             continue;
