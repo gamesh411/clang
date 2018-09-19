@@ -4324,7 +4324,7 @@ TEST_P(ImportClassTemplates, ImportDefinitions) {
   EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
   auto To0 = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(Imported0 == To0);
-  EXPECT_TRUE(To0->getTemplatedDecl());
+  ASSERT_TRUE(To0->getTemplatedDecl());
   EXPECT_TRUE(To0->isThisDeclarationADefinition());
 }
 
