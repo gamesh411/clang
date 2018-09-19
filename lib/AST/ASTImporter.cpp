@@ -4538,12 +4538,21 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   if (FoundByLookup) {
     auto *Recent =
         const_cast<ClassTemplateDecl *>(FoundByLookup->getMostRecentDecl());
-    // FIXME create a test for this case!
+
+    // It is possible that during the import of the class template definition
+    // we start the import of a fwd friend decl of the very same class template
+    // and we add the fwd friend decl to the lookup table. But the ToTemplated
+    // had been created earlier and by that time the lookup could not find
+    // anything existing, so it has no previous decl. Later, (still during the
+    // import of the fwd friend decl) we start to import the definition again
+    // and this time the lookup finds the previous fwd friend class template.
+    // In this case we must set up the previous decl for the templated decl.
     if (!ToTemplated->getPreviousDecl()) {
       auto *PrevTemplated = FoundByLookup->getTemplatedDecl()->getMostRecentDecl();
       if (ToTemplated != PrevTemplated)
         ToTemplated->setPreviousDecl(PrevTemplated);
     }
+
     D2->setPreviousDecl(Recent);
   }
 
