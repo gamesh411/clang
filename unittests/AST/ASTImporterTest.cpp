@@ -4236,8 +4236,8 @@ TEST_P(ImportClassTemplates,
   EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
   auto ToD = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(ImportedD == ToD);
+  ASSERT_TRUE(ToD->getTemplatedDecl());
   EXPECT_FALSE(ToD->isThisDeclarationADefinition());
-  EXPECT_TRUE(ToD->getTemplatedDecl());
 }
 
 TEST_P(ImportClassTemplates, ImportPrototypeAfterImportedPrototype) {
@@ -4256,11 +4256,11 @@ TEST_P(ImportClassTemplates, ImportPrototypeAfterImportedPrototype) {
   auto To1 = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(Imported0 == To0);
   EXPECT_TRUE(Imported1 == To1);
+  ASSERT_TRUE(To0->getTemplatedDecl());
+  ASSERT_TRUE(To1->getTemplatedDecl());
   EXPECT_FALSE(To0->isThisDeclarationADefinition());
   EXPECT_FALSE(To1->isThisDeclarationADefinition());
   EXPECT_EQ(To1->getPreviousDecl(), To0);
-  EXPECT_TRUE(To0->getTemplatedDecl());
-  EXPECT_TRUE(To1->getTemplatedDecl());
   EXPECT_EQ(To1->getTemplatedDecl()->getPreviousDecl(),
             To0->getTemplatedDecl());
 }
@@ -4275,8 +4275,8 @@ TEST_P(ImportClassTemplates, DefinitionShouldBeImportedAsADefinition) {
 
   EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
   auto ToD = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
+  ASSERT_TRUE(ToD->getTemplatedDecl());
   EXPECT_TRUE(ToD->isThisDeclarationADefinition());
-  EXPECT_TRUE(ToD->getTemplatedDecl());
 }
 
 TEST_P(ImportClassTemplates,
@@ -4298,11 +4298,11 @@ TEST_P(ImportClassTemplates,
   auto To1 = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(Imported0 == To0);
   EXPECT_TRUE(Imported1 == To1);
+  ASSERT_TRUE(To0->getTemplatedDecl());
+  ASSERT_TRUE(To1->getTemplatedDecl());
   EXPECT_FALSE(To0->isThisDeclarationADefinition());
   EXPECT_FALSE(To1->isThisDeclarationADefinition());
   EXPECT_EQ(To1->getPreviousDecl(), To0);
-  EXPECT_TRUE(To0->getTemplatedDecl());
-  EXPECT_TRUE(To1->getTemplatedDecl());
   EXPECT_EQ(To1->getTemplatedDecl()->getPreviousDecl(),
             To0->getTemplatedDecl());
 }
@@ -4324,8 +4324,8 @@ TEST_P(ImportClassTemplates, ImportDefinitions) {
   EXPECT_EQ(DeclCounter<ClassTemplateDecl>().match(ToTU, Pattern), 1u);
   auto To0 = FirstDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(Imported0 == To0);
-  EXPECT_TRUE(To0->isThisDeclarationADefinition());
   EXPECT_TRUE(To0->getTemplatedDecl());
+  EXPECT_TRUE(To0->isThisDeclarationADefinition());
 }
 
 TEST_P(ImportClassTemplates, ImportDefinitionThenPrototype) {
@@ -4348,11 +4348,11 @@ TEST_P(ImportClassTemplates, ImportDefinitionThenPrototype) {
   auto ToProto = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(ImportedDef == ToDef);
   EXPECT_TRUE(ImportedProto == ToProto);
+  ASSERT_TRUE(ToDef->getTemplatedDecl());
+  ASSERT_TRUE(ToProto->getTemplatedDecl());
   EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
   EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
   EXPECT_EQ(ToProto->getPreviousDecl(), ToDef);
-  EXPECT_TRUE(ToDef->getTemplatedDecl());
-  EXPECT_TRUE(ToProto->getTemplatedDecl());
   EXPECT_EQ(ToProto->getTemplatedDecl()->getPreviousDecl(),
             ToDef->getTemplatedDecl());
 }
@@ -4377,11 +4377,11 @@ TEST_P(ImportClassTemplates, ImportPrototypeThenDefinition) {
   auto ToDef = LastDeclMatcher<ClassTemplateDecl>().match(ToTU, Pattern);
   EXPECT_TRUE(ImportedDef == ToDef);
   EXPECT_TRUE(ImportedProto == ToProto);
+  ASSERT_TRUE(ToProto->getTemplatedDecl());
+  ASSERT_TRUE(ToDef->getTemplatedDecl());
   EXPECT_TRUE(ToDef->isThisDeclarationADefinition());
   EXPECT_FALSE(ToProto->isThisDeclarationADefinition());
   EXPECT_EQ(ToDef->getPreviousDecl(), ToProto);
-  EXPECT_TRUE(ToProto->getTemplatedDecl());
-  EXPECT_TRUE(ToDef->getTemplatedDecl());
   EXPECT_EQ(ToDef->getTemplatedDecl()->getPreviousDecl(),
             ToProto->getTemplatedDecl());
 }
