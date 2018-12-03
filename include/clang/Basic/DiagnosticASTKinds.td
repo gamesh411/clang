@@ -201,18 +201,18 @@ let CategoryName = "VTable ABI Issue" in {
 // Importing ASTs
 def warn_odr_variable_type_inconsistent : Warning<
   "external variable %0 declared with incompatible types in different "
-  "translation units (%1 vs. %2)">, InGroup<Odr>;
+  "translation units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 def warn_odr_variable_multiple_def : Warning<
   "external variable %0 defined in multiple translation units">,
-   InGroup<Odr>;
+   InGroup<OneDefinitionRule>;
 def note_odr_value_here : Note<"declared here with type %0">;
 def note_odr_defined_here : Note<"also defined here">;
 def warn_odr_function_type_inconsistent : Warning<
   "external function %0 declared with incompatible types in different "
-  "translation units (%1 vs. %2)">, InGroup<Odr>;
+  "translation units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 def warn_odr_tag_type_inconsistent
     : Warning<"type %0 has incompatible definitions in different translation "
-              "units">, InGroup<Odr>;
+              "units">, InGroup<OneDefinitionRule>;
 def note_odr_tag_kind_here: Note<
   "%0 is a %select{struct|interface|union|class|enum}1 here">;
 def note_odr_field : Note<"field %0 has type %1 here">;
@@ -231,42 +231,42 @@ def note_odr_missing_enumerator : Note<"no corresponding enumerator here">;
 
 def warn_odr_field_type_inconsistent : Warning<
   "field %0 declared with incompatible types in different "
-  "translation units (%1 vs. %2)">, InGroup<Odr>;
+  "translation units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 
 // Importing Objective-C ASTs
 def warn_odr_ivar_type_inconsistent : Warning<
   "instance variable %0 declared with incompatible types in different "
-  "translation units (%1 vs. %2)">, InGroup<Odr>;
+  "translation units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 def warn_odr_objc_superclass_inconsistent : Warning<
-  "class %0 has incompatible superclasses">, InGroup<Odr>;
+  "class %0 has incompatible superclasses">, InGroup<OneDefinitionRule>;
 def note_odr_objc_superclass : Note<"inherits from superclass %0 here">;
 def note_odr_objc_missing_superclass : Note<"no corresponding superclass here">;
 def warn_odr_objc_method_result_type_inconsistent : Warning<
   "%select{class|instance}0 method %1 has incompatible result types in "
-  "different translation units (%2 vs. %3)">, InGroup<Odr>;
+  "different translation units (%2 vs. %3)">, InGroup<OneDefinitionRule>;
 def warn_odr_objc_method_num_params_inconsistent : Warning<
   "%select{class|instance}0 method %1 has a different number of parameters in "
-  "different translation units (%2 vs. %3)">, InGroup<Odr>;
+  "different translation units (%2 vs. %3)">, InGroup<OneDefinitionRule>;
 def warn_odr_objc_method_param_type_inconsistent : Warning<
   "%select{class|instance}0 method %1 has a parameter with a different types "
-  "in different translation units (%2 vs. %3)">, InGroup<Odr>;
+  "in different translation units (%2 vs. %3)">, InGroup<OneDefinitionRule>;
 def warn_odr_objc_method_variadic_inconsistent : Warning<
   "%select{class|instance}0 method %1 is variadic in one translation unit "
-  "and not variadic in another">, InGroup<Odr>;
+  "and not variadic in another">, InGroup<OneDefinitionRule>;
 def note_odr_objc_method_here : Note<
   "%select{class|instance}0 method %1 also declared here">;
 def warn_odr_objc_property_type_inconsistent : Warning<
   "property %0 declared with incompatible types in different "
-  "translation units (%1 vs. %2)">, InGroup<Odr>;
+  "translation units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 def warn_odr_objc_property_impl_kind_inconsistent : Warning<
   "property %0 is implemented with %select{@synthesize|@dynamic}1 in one "
   "translation but %select{@dynamic|@synthesize}1 in another translation unit">,
-   InGroup<Odr>;
+   InGroup<OneDefinitionRule>;
 def note_odr_objc_property_impl_kind : Note<
   "property %0 is implemented with %select{@synthesize|@dynamic}1 here">;
 def warn_odr_objc_synthesize_ivar_inconsistent : Warning<
   "property %0 is synthesized to different ivars in different translation "
-  "units (%1 vs. %2)">, InGroup<Odr>;
+  "units (%1 vs. %2)">, InGroup<OneDefinitionRule>;
 def note_odr_objc_synthesize_ivar_here : Note<
   "property is synthesized to ivar %0 here">;
 
@@ -275,22 +275,22 @@ def note_odr_friend : Note<"friend declared here">;
 def note_odr_missing_friend : Note<"no corresponding friend here">;
 def warn_odr_different_num_template_parameters : Warning<
   "template parameter lists have a different number of parameters (%0 vs %1)">,
-   InGroup<Odr>;
+   InGroup<OneDefinitionRule>;
 def note_odr_template_parameter_list : Note<
   "template parameter list also declared here">;
 def warn_odr_different_template_parameter_kind : Warning<
   "template parameter has different kinds in different translation units">,
-   InGroup<Odr>;
+   InGroup<OneDefinitionRule>;
 def note_odr_template_parameter_here : Note<
   "template parameter declared here">;
 def warn_odr_parameter_pack_non_pack : Warning<
   "parameter kind mismatch; parameter is %select{not a|a}0 parameter pack">,
-   InGroup<Odr>;
+   InGroup<OneDefinitionRule>;
 def note_odr_parameter_pack_non_pack : Note<
   "%select{parameter|parameter pack}0 declared here">;
 def warn_odr_non_type_parameter_type_inconsistent : Warning<
   "non-type template parameter declared with incompatible types in different "
-  "translation units (%0 vs. %1)">, InGroup<Odr>;
+  "translation units (%0 vs. %1)">, InGroup<OneDefinitionRule>;
 def err_unsupported_ast_node: Error<"cannot import unsupported AST node %0">;
 def warn_ast_importer_missing_decl_in_decl_context : Warning<
   "missing %0Decl in imported DeclContext <%1:%2:%3>">;
