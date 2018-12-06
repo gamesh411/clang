@@ -918,6 +918,7 @@ Expected<LambdaCapture> ASTNodeImporter::import(const LambdaCapture &From) {
 using namespace clang;
 
 ExpectedType ASTNodeImporter::VisitType(const Type *T) {
+  assert(false && "ASTNodeImporter::VisitType(const Type *T)");
   Importer.FromDiag(SourceLocation(), diag::err_unsupported_ast_node)
     << T->getTypeClassName();
   return make_error<ImportError>(ImportError::UnsupportedConstruct);
@@ -1504,6 +1505,9 @@ Error ASTNodeImporter::ImportDeclParts(
           getLeafPointeeType(P->getType().getCanonicalType().getTypePtr());
       auto *RT = dyn_cast<RecordType>(LeafT);
       if (RT && RT->getDecl() == D) {
+        assert(false && "ASTNodeImporter::ImportDeclParts(\
+    NamedDecl *D, DeclContext *&DC, DeclContext *&LexicalDC,\
+    DeclarationName &Name, NamedDecl *&ToD, SourceLocation &Loc)");
         Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
             << D->getDeclKindName();
         return make_error<ImportError>(ImportError::UnsupportedConstruct);
@@ -2062,12 +2066,14 @@ bool ASTNodeImporter::IsStructuralMatch(VarTemplateDecl *From,
 }
 
 ExpectedDecl ASTNodeImporter::VisitDecl(Decl *D) {
+  assert(false && "ASTNodeImporter::VisitDecl(Decl *D)");
   Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
     << D->getDeclKindName();
   return make_error<ImportError>(ImportError::UnsupportedConstruct);
 }
 
 ExpectedDecl ASTNodeImporter::VisitImportDecl(ImportDecl *D) {
+  assert(false && "ASTNodeImporter::VisitImportDecl(ImportDecl *D)");
   Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
       << D->getDeclKindName();
   return make_error<ImportError>(ImportError::UnsupportedConstruct);
@@ -5522,6 +5528,7 @@ ASTNodeImporter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
 //----------------------------------------------------------------------------
 
 ExpectedStmt ASTNodeImporter::VisitStmt(Stmt *S) {
+  assert(false && "ASTNodeImporter::VisitStmt(Stmt *S)");
   Importer.FromDiag(S->getBeginLoc(), diag::err_unsupported_ast_node)
       << S->getStmtClassName();
   return make_error<ImportError>(ImportError::UnsupportedConstruct);
@@ -6047,6 +6054,7 @@ ExpectedStmt ASTNodeImporter::VisitObjCAutoreleasePoolStmt(
 // Import Expressions
 //----------------------------------------------------------------------------
 ExpectedStmt ASTNodeImporter::VisitExpr(Expr *E) {
+  assert(false && "ASTNodeImporter::VisitExpr(Expr *E)");
   Importer.FromDiag(E->getBeginLoc(), diag::err_unsupported_ast_node)
       << E->getStmtClassName();
   return make_error<ImportError>(ImportError::UnsupportedConstruct);
