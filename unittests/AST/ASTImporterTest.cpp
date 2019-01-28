@@ -3956,8 +3956,20 @@ TEST_P(ASTImporterLookupTableTest, LookupDeclNamesFromDifferentTUs) {
   ASSERT_EQ(Res.size(), 0u);
 }
 
+static QualType getUnderlyingType(const TypedefType *TDT) {
+  QualType T = TDT->getDecl()->getUnderlyingType();
+
+  if (const auto * inner = dyn_cast<TypedefType>(T.getTypePtr()))
+    return getUnderlyingType(inner);
+
+  return T;
+}
+
 static const RecordDecl * getRecordDeclOfFriend(FriendDecl *FD) {
   QualType Ty = FD->getFriendType()->getType();
+  if (auto * inner = dyn_cast<TypedefType>(Ty.getTypePtr())) {
+    Ty = getUnderlyingType(inner);
+  }
   if (isa<ElaboratedType>(Ty))
     Ty = cast<ElaboratedType>(Ty)->getNamedType();
   return cast<RecordType>(Ty)->getDecl();
@@ -4010,6 +4022,36 @@ TEST_P(ASTImporterLookupTableTest,
 
   Res = LT.lookup(Y, Name);
   EXPECT_EQ(Res.size(), 0u);
+}
+
+TEST_P(ASTImporterLookupTableTest,
+       LookupFindsFriendClassDeclWithTypeAlias) {
+  TranslationUnitDecl *ToTU = getToTuDecl(
+      R"(
+      class F;
+      using alias_of_f = F;
+      class Y { friend alias_of_f; };
+      )",
+      Lang_CXX11);
+
+  ASTImporterLookupTable LT(*ToTU);
+
+  auto *FriendD = FirstDeclMatcher<FriendDecl>().match(ToTU, friendDecl());
+  auto *Y = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, cxxRecordDecl(hasName("Y")));
+  auto *F = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, cxxRecordDecl(hasName("F")));
+
+  const RecordDecl *RD = getRecordDeclOfFriend(FriendD);
+
+  DeclarationName FwdName = F->getDeclName();
+  auto Res = LT.lookup(ToTU, FwdName);
+  EXPECT_EQ(Res.size(), 1u);
+  EXPECT_EQ(*Res.begin(), RD);
+
+  Res = LT.lookup(Y, FwdName);
+  EXPECT_EQ(Res.size(), 0u);
+
+  DeclarationName AliasName = RD->getDeclName();
+  EXPECT_EQ(AliasName, FwdName);
 }
 
 TEST_P(ASTImporterLookupTableTest, LookupFindsFwdFriendClassTemplateDecl) {
