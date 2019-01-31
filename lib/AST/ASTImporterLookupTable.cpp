@@ -27,14 +27,11 @@ struct Builder : RecursiveASTVisitor<Builder> {
     LT.add(D);
     return true;
   }
-  // Friend declarations introduce new types, which should be visible during
-  // lookup of a specific named declaration even if it would be illegal to
-  // reference them at the root level of the TU.
-  // This visitor is necessary because in case of some friend declarations the
-  // AST does not contain the referenced friend class or function as a child of
-  // the referencing declaration, thus causing the recursive discovery fail.
-  // This visitor helps this discovery process by making the lookup table aware
-  // of these "hidden" declarations.
+  // In most cases the FriendDecl inside the referencing class contains the
+  // declaration of the "befriended class" as a child node, so it is discovered
+  // during the recursive visitation. Dependent types behave this way. In some
+  // other cases the "befriended class" must be visited explicitly, and this is
+  // simulated by adding its declaration to the lookup table.
   bool VisitFriendDecl(FriendDecl *D) {
     if (D->getFriendType()) {
       QualType Ty = D->getFriendType()->getType();
@@ -42,18 +39,16 @@ struct Builder : RecursiveASTVisitor<Builder> {
         Ty = cast<ElaboratedType>(Ty)->getNamedType();
       if (!Ty->isDependentType()) {
         // We are concerning ourselves with the case where the type of the
-        // declared type is dependent, as friend declaration with a dependent
-        // type product the correct AST structure.
+        // declared type is not dependent, as friend declaration with a
+        // dependent type produces the correct AST structure.
         if (const auto *RTy = dyn_cast<RecordType>(Ty))
           LT.add(RTy->getAsCXXRecordDecl());
         else if (const auto *SpecTy =
                      dyn_cast<TemplateSpecializationType>(Ty))
           LT.add(SpecTy->getAsCXXRecordDecl());
-        else if (const auto *AliasTy =
-                     dyn_cast<TypedefType>(Ty)) {
+        else if (isa<TypedefType>(Ty)) {
           // If we have a forward declaration of an aliased type, nothing
-          // should be done, however we don't want to mark this case as
-          // unreachable, so this is an empty branch.
+          // should be done.
         }
         else {
           llvm_unreachable("Unhandled type of friend class");
