@@ -43,14 +43,12 @@ struct Builder : RecursiveASTVisitor<Builder> {
         // dependent type produces the correct AST structure.
         if (const auto *RTy = dyn_cast<RecordType>(Ty))
           LT.add(RTy->getAsCXXRecordDecl());
-        else if (const auto *SpecTy =
-                     dyn_cast<TemplateSpecializationType>(Ty))
+        else if (const auto *SpecTy = dyn_cast<TemplateSpecializationType>(Ty))
           LT.add(SpecTy->getAsCXXRecordDecl());
         else if (isa<TypedefType>(Ty)) {
           // If we have a forward declaration of an aliased type, nothing
           // should be done.
-        }
-        else {
+        } else {
           llvm_unreachable("Unhandled type of friend class");
         }
       }

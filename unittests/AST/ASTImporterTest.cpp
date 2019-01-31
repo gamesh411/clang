@@ -4037,7 +4037,6 @@ TEST_P(ASTImporterLookupTableTest,
   ASTImporterLookupTable LT(*ToTU);
 
   auto *FriendD = FirstDeclMatcher<FriendDecl>().match(ToTU, friendDecl());
-  auto *Y = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, cxxRecordDecl(hasName("Y")));
   auto *F = FirstDeclMatcher<CXXRecordDecl>().match(ToTU, cxxRecordDecl(hasName("F")));
 
   const RecordDecl *RD = getRecordDeclOfFriend(FriendD);
