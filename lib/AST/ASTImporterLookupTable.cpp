@@ -30,8 +30,8 @@ struct Builder : RecursiveASTVisitor<Builder> {
   // In most cases the FriendDecl inside the referencing class contains the
   // declaration of the "befriended class" as a child node, so it is discovered
   // during the recursive visitation. Dependent types behave this way. In some
-  // other cases the "befriended class" must be visited explicitly, and this is
-  // simulated by adding its declaration to the lookup table.
+  // other cases the non-child "befriended class" must be fetched explicitly
+  // from the FriendDecl, and only then can we add it to the lookup table.
   bool VisitFriendDecl(FriendDecl *D) {
     if (D->getFriendType()) {
       QualType Ty = D->getFriendType()->getType();
