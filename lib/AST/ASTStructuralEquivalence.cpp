@@ -294,18 +294,20 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     return true;
 
   case TemplateArgument::Type:
-    return IsStructurallyEquivalent(Context, Arg1.getAsType(), Arg2.getAsType());
+    return IsStructurallyEquivalent(Context, Arg1.getAsType(),
+                                    Arg2.getAsType());
 
   case TemplateArgument::Integral:
     if (!IsStructurallyEquivalent(Context, Arg1.getIntegralType(),
-                                          Arg2.getIntegralType()))
+                                  Arg2.getIntegralType()))
       return false;
 
     return llvm::APSInt::isSameValue(Arg1.getAsIntegral(),
                                      Arg2.getAsIntegral());
 
   case TemplateArgument::Declaration:
-    return IsStructurallyEquivalent(Context, Arg1.getAsDecl(), Arg2.getAsDecl());
+    return IsStructurallyEquivalent(Context, Arg1.getAsDecl(),
+                                    Arg2.getAsDecl());
 
   case TemplateArgument::NullPtr:
     return true; // FIXME: Is this correct?
@@ -1053,8 +1055,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   }
 
   // Check the prototypes.
-  if (!::IsStructurallyEquivalent(Context,
-                                  Method1->getType(), Method2->getType()))
+  if (!::IsStructurallyEquivalent(Context, Method1->getType(),
+                                  Method2->getType()))
     return false;
 
   return true;
@@ -1191,15 +1193,15 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
 
       // Check the friends for consistency.
       CXXRecordDecl::friend_iterator Friend2 = D2CXX->friend_begin(),
-              Friend2End = D2CXX->friend_end();
+                                     Friend2End = D2CXX->friend_end();
       for (CXXRecordDecl::friend_iterator Friend1 = D1CXX->friend_begin(),
-                   Friend1End = D1CXX->friend_end();
+                                          Friend1End = D1CXX->friend_end();
            Friend1 != Friend1End; ++Friend1, ++Friend2) {
         if (Friend2 == Friend2End) {
           if (Context.Complain) {
             Context.Diag2(D2->getLocation(),
                           diag::warn_odr_tag_type_inconsistent)
-                    << Context.ToCtx.getTypeDeclType(D2CXX);
+                << Context.ToCtx.getTypeDeclType(D2CXX);
             Context.Diag1((*Friend1)->getFriendLoc(), diag::note_odr_friend);
             Context.Diag2(D2->getLocation(), diag::note_odr_missing_friend);
           }
@@ -1208,8 +1210,9 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
 
         if (!IsStructurallyEquivalent(Context, *Friend1, *Friend2)) {
           if (Context.Complain) {
-            Context.Diag2(D2->getLocation(), diag::warn_odr_tag_type_inconsistent)
-              << Context.ToCtx.getTypeDeclType(D2CXX);
+            Context.Diag2(D2->getLocation(),
+                          diag::warn_odr_tag_type_inconsistent)
+                << Context.ToCtx.getTypeDeclType(D2CXX);
             Context.Diag1((*Friend1)->getFriendLoc(), diag::note_odr_friend);
             Context.Diag2((*Friend2)->getFriendLoc(), diag::note_odr_friend);
           }
@@ -1220,7 +1223,7 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
       if (Friend2 != Friend2End) {
         if (Context.Complain) {
           Context.Diag2(D2->getLocation(), diag::warn_odr_tag_type_inconsistent)
-                  << Context.ToCtx.getTypeDeclType(D2);
+              << Context.ToCtx.getTypeDeclType(D2);
           Context.Diag2((*Friend2)->getFriendLoc(), diag::note_odr_friend);
           Context.Diag1(D1->getLocation(), diag::note_odr_missing_friend);
         }
@@ -1352,7 +1355,9 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   if (Params1->size() != Params2->size()) {
     if (Context.Complain) {
       Context.Diag2(Params2->getTemplateLoc(),
-                    diag::err_odr_different_num_template_parameters)
+                    Context.ErrorOnTagTypeMismatch
+                        ? diag::err_odr_different_num_template_parameters
+                        : diag::warn_odr_different_num_template_parameters)
           << Params1->size() << Params2->size();
       Context.Diag1(Params1->getTemplateLoc(),
                     diag::note_odr_template_parameter_list);
@@ -1364,7 +1369,9 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     if (Params1->getParam(I)->getKind() != Params2->getParam(I)->getKind()) {
       if (Context.Complain) {
         Context.Diag2(Params2->getParam(I)->getLocation(),
-                      diag::err_odr_different_template_parameter_kind);
+                      Context.ErrorOnTagTypeMismatch
+                          ? diag::err_odr_different_template_parameter_kind
+                          : diag::warn_odr_different_template_parameter_kind);
         Context.Diag1(Params1->getParam(I)->getLocation(),
                       diag::note_odr_template_parameter_here);
       }
@@ -1384,7 +1391,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      TemplateTypeParmDecl *D2) {
   if (D1->isParameterPack() != D2->isParameterPack()) {
     if (Context.Complain) {
-      Context.Diag2(D2->getLocation(), diag::err_odr_parameter_pack_non_pack)
+      Context.Diag2(D2->getLocation(),
+                    Context.ErrorOnTagTypeMismatch
+                        ? diag::err_odr_parameter_pack_non_pack
+                        : diag::warn_odr_parameter_pack_non_pack)
           << D2->isParameterPack();
       Context.Diag1(D1->getLocation(), diag::note_odr_parameter_pack_non_pack)
           << D1->isParameterPack();
@@ -1400,7 +1410,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      NonTypeTemplateParmDecl *D2) {
   if (D1->isParameterPack() != D2->isParameterPack()) {
     if (Context.Complain) {
-      Context.Diag2(D2->getLocation(), diag::err_odr_parameter_pack_non_pack)
+      Context.Diag2(D2->getLocation(),
+                    Context.ErrorOnTagTypeMismatch
+                        ? diag::err_odr_parameter_pack_non_pack
+                        : diag::warn_odr_parameter_pack_non_pack)
           << D2->isParameterPack();
       Context.Diag1(D1->getLocation(), diag::note_odr_parameter_pack_non_pack)
           << D1->isParameterPack();
@@ -1412,7 +1425,9 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   if (!IsStructurallyEquivalent(Context, D1->getType(), D2->getType())) {
     if (Context.Complain) {
       Context.Diag2(D2->getLocation(),
-                    diag::err_odr_non_type_parameter_type_inconsistent)
+                    Context.ErrorOnTagTypeMismatch
+                        ? diag::err_odr_non_type_parameter_type_inconsistent
+                        : diag::warn_odr_non_type_parameter_type_inconsistent)
           << D2->getType() << D1->getType();
       Context.Diag1(D1->getLocation(), diag::note_odr_value_here)
           << D1->getType();
@@ -1428,7 +1443,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      TemplateTemplateParmDecl *D2) {
   if (D1->isParameterPack() != D2->isParameterPack()) {
     if (Context.Complain) {
-      Context.Diag2(D2->getLocation(), diag::err_odr_parameter_pack_non_pack)
+      Context.Diag2(D2->getLocation(),
+                    Context.ErrorOnTagTypeMismatch
+                        ? diag::err_odr_parameter_pack_non_pack
+                        : diag::warn_odr_parameter_pack_non_pack)
           << D2->isParameterPack();
       Context.Diag1(D1->getLocation(), diag::note_odr_parameter_pack_non_pack)
           << D1->isParameterPack();
@@ -1441,8 +1459,9 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                   D2->getTemplateParameters());
 }
 
-static bool IsTemplateDeclCommonStructurallyEquivalent(
-    StructuralEquivalenceContext &Ctx, TemplateDecl *D1, TemplateDecl *D2) {
+static bool
+IsTemplateDeclCommonStructurallyEquivalent(StructuralEquivalenceContext &Ctx,
+                                           TemplateDecl *D1, TemplateDecl *D2) {
   if (!IsStructurallyEquivalent(D1->getIdentifier(), D2->getIdentifier()))
     return false;
   if (!D1->getIdentifier()) // Special name
@@ -1480,11 +1499,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      FriendDecl *D1, FriendDecl *D2) {
   if ((D1->getFriendType() && D2->getFriendDecl()) ||
       (D1->getFriendDecl() && D2->getFriendType())) {
-      return false;
+    return false;
   }
   if (D1->getFriendType() && D2->getFriendType())
-    return IsStructurallyEquivalent(Context,
-                                    D1->getFriendType()->getType(),
+    return IsStructurallyEquivalent(Context, D1->getFriendType()->getType(),
                                     D2->getFriendType()->getType());
   if (D1->getFriendDecl() && D2->getFriendDecl())
     return IsStructurallyEquivalent(Context, D1->getFriendDecl(),
@@ -1625,8 +1643,8 @@ bool StructuralEquivalenceContext::CheckCommonEquivalence(Decl *D1, Decl *D2) {
   return true;
 }
 
-bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(
-    Decl *D1, Decl *D2) {
+bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(Decl *D1,
+                                                                Decl *D2) {
   // FIXME: Switch on all declaration kinds. For now, we're just going to
   // check the obvious ones.
   if (auto *Record1 = dyn_cast<RecordDecl>(D1)) {
@@ -1685,8 +1703,7 @@ bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(
     }
   } else if (auto *ClassTemplate1 = dyn_cast<ClassTemplateDecl>(D1)) {
     if (auto *ClassTemplate2 = dyn_cast<ClassTemplateDecl>(D2)) {
-      if (!::IsStructurallyEquivalent(*this, ClassTemplate1,
-                                      ClassTemplate2))
+      if (!::IsStructurallyEquivalent(*this, ClassTemplate1, ClassTemplate2))
         return false;
     } else {
       // Class template/non-class-template mismatch.
@@ -1752,8 +1769,8 @@ bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(
     }
   } else if (FriendDecl *FrD1 = dyn_cast<FriendDecl>(D1)) {
     if (FriendDecl *FrD2 = dyn_cast<FriendDecl>(D2)) {
-        if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
-          return false;
+      if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
+        return false;
     } else {
       // Kind mismatch.
       return false;
