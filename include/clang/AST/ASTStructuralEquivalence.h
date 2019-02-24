@@ -61,6 +61,9 @@ struct StructuralEquivalenceContext {
   /// unifying two types.
   bool StrictTypeSpelling;
 
+  /// Whether warn or error on tag type mismatches.
+  bool ErrorOnTagTypeMismatch;
+
   /// Whether to complain about failures.
   bool Complain;
 
@@ -70,9 +73,11 @@ struct StructuralEquivalenceContext {
   StructuralEquivalenceContext(ASTContext &FromCtx, ASTContext &ToCtx,
                                StructuralEquivalenceKind EqKind,
                                bool StrictTypeSpelling = false,
-                               bool Complain = true)
+                               bool Complain = true,
+                               bool ErrorOnTagTypeMismatch = false)
       : FromCtx(FromCtx), ToCtx(ToCtx), EqKind(EqKind),
-        StrictTypeSpelling(StrictTypeSpelling), Complain(Complain) {}
+        StrictTypeSpelling(StrictTypeSpelling),
+        ErrorOnTagTypeMismatch(ErrorOnTagTypeMismatch), Complain(Complain) {}
 
   DiagnosticBuilder Diag1(SourceLocation Loc, unsigned DiagID);
   DiagnosticBuilder Diag2(SourceLocation Loc, unsigned DiagID);
