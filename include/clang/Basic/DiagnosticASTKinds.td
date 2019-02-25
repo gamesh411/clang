@@ -353,10 +353,6 @@ def warn_odr_non_type_parameter_type_inconsistent : Warning<
   "translation units (%0 vs. %1)">,
   InGroup<ODR>;
 def err_unsupported_ast_node: Error<"cannot import unsupported AST node %0">;
-def warn_unsupported_ast_node: Warning<"cannot import unsupported AST node %0">,
-  InGroup<ODR>;
-def err_ast_importer_missing_decl_in_decl_context : Error<
-  "missing %0Decl in imported DeclContext <%1:%2:%3>">;
 def warn_ast_importer_missing_decl_in_decl_context : Warning<
   "missing %0Decl in imported DeclContext <%1:%2:%3>">;
 }

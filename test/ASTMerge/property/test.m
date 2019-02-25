@@ -10,4 +10,4 @@
 // CHECK: property2.m:29:21: note: property is synthesized to ivar 'ivar2' here
 // CHECK: property1.m:29:10: warning: property 'Prop3' is implemented with @dynamic in one translation but @synthesize in another translation unit
 // CHECK: property2.m:31:13: note: property 'Prop3' is implemented with @synthesize here
-// CHECK: 4 warnings  generated.
+// CHECK: 4 warnings generated.
