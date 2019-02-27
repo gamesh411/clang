@@ -294,20 +294,18 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     return true;
 
   case TemplateArgument::Type:
-    return IsStructurallyEquivalent(Context, Arg1.getAsType(),
-                                    Arg2.getAsType());
+    return IsStructurallyEquivalent(Context, Arg1.getAsType(), Arg2.getAsType());
 
   case TemplateArgument::Integral:
     if (!IsStructurallyEquivalent(Context, Arg1.getIntegralType(),
-                                  Arg2.getIntegralType()))
+                                          Arg2.getIntegralType()))
       return false;
 
     return llvm::APSInt::isSameValue(Arg1.getAsIntegral(),
                                      Arg2.getAsIntegral());
 
   case TemplateArgument::Declaration:
-    return IsStructurallyEquivalent(Context, Arg1.getAsDecl(),
-                                    Arg2.getAsDecl());
+    return IsStructurallyEquivalent(Context, Arg1.getAsDecl(), Arg2.getAsDecl());
 
   case TemplateArgument::NullPtr:
     return true; // FIXME: Is this correct?
@@ -1051,8 +1049,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   }
 
   // Check the prototypes.
-  if (!::IsStructurallyEquivalent(Context, Method1->getType(),
-                                  Method2->getType()))
+  if (!::IsStructurallyEquivalent(Context,
+                                  Method1->getType(), Method2->getType()))
     return false;
 
   return true;
@@ -1450,9 +1448,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                   D2->getTemplateParameters());
 }
 
-static bool
-IsTemplateDeclCommonStructurallyEquivalent(StructuralEquivalenceContext &Ctx,
-                                           TemplateDecl *D1, TemplateDecl *D2) {
+static bool IsTemplateDeclCommonStructurallyEquivalent(
+    StructuralEquivalenceContext &Ctx, TemplateDecl *D1, TemplateDecl *D2) {
   if (!IsStructurallyEquivalent(D1->getIdentifier(), D2->getIdentifier()))
     return false;
   if (!D1->getIdentifier()) // Special name
@@ -1490,10 +1487,11 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
                                      FriendDecl *D1, FriendDecl *D2) {
   if ((D1->getFriendType() && D2->getFriendDecl()) ||
       (D1->getFriendDecl() && D2->getFriendType())) {
-    return false;
+      return false;
   }
   if (D1->getFriendType() && D2->getFriendType())
-    return IsStructurallyEquivalent(Context, D1->getFriendType()->getType(),
+    return IsStructurallyEquivalent(Context,
+                                    D1->getFriendType()->getType(),
                                     D2->getFriendType()->getType());
   if (D1->getFriendDecl() && D2->getFriendDecl())
     return IsStructurallyEquivalent(Context, D1->getFriendDecl(),
@@ -1679,8 +1677,8 @@ bool StructuralEquivalenceContext::CheckCommonEquivalence(Decl *D1, Decl *D2) {
   return true;
 }
 
-bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(Decl *D1,
-                                                                Decl *D2) {
+bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(
+    Decl *D1, Decl *D2) {
   // FIXME: Switch on all declaration kinds. For now, we're just going to
   // check the obvious ones.
   if (auto *Record1 = dyn_cast<RecordDecl>(D1)) {
@@ -1739,7 +1737,8 @@ bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(Decl *D1,
     }
   } else if (auto *ClassTemplate1 = dyn_cast<ClassTemplateDecl>(D1)) {
     if (auto *ClassTemplate2 = dyn_cast<ClassTemplateDecl>(D2)) {
-      if (!::IsStructurallyEquivalent(*this, ClassTemplate1, ClassTemplate2))
+      if (!::IsStructurallyEquivalent(*this, ClassTemplate1,
+                                      ClassTemplate2))
         return false;
     } else {
       // Class template/non-class-template mismatch.
@@ -1805,8 +1804,8 @@ bool StructuralEquivalenceContext::CheckKindSpecificEquivalence(Decl *D1,
     }
   } else if (FriendDecl *FrD1 = dyn_cast<FriendDecl>(D1)) {
     if (FriendDecl *FrD2 = dyn_cast<FriendDecl>(D2)) {
-      if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
-        return false;
+        if (!::IsStructurallyEquivalent(*this, FrD1, FrD2))
+          return false;
     } else {
       // Kind mismatch.
       return false;
