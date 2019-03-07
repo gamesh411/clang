@@ -64,6 +64,9 @@ def run_command(command, cwd=None):
     :param cwd: the working directory where the command will be executed
     :return: output of the command
     """
+
+    command = shlex.split(' '.join(command))
+
     def decode_when_needed(result):
         """ check_output returns bytes or string depend on python version """
         return result.decode('utf-8') if isinstance(result, bytes) else result
