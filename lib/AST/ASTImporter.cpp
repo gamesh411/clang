@@ -3231,6 +3231,7 @@ ExpectedDecl ASTNodeImporter::VisitFieldDecl(FieldDecl *D) {
 
   // Determine whether we've already imported this field.
   auto FoundDecls = Importer.findDeclsInToCtx(DC, Name);
+  SmallVector<NamedDecl *, 4> ConflictingDecls;
   for (auto *FoundDecl : FoundDecls) {
     if (FieldDecl *FoundField = dyn_cast<FieldDecl>(FoundDecl)) {
       // For anonymous fields, match up by index.
@@ -3264,14 +3265,22 @@ ExpectedDecl ASTNodeImporter::VisitFieldDecl(FieldDecl *D) {
         return FoundField;
       }
 
-      // FIXME: Why is this case not handled with calling HandleNameConflict?
       Importer.ToDiag(Loc, diag::warn_odr_field_type_inconsistent)
         << Name << D->getType() << FoundField->getType();
       Importer.ToDiag(FoundField->getLocation(), diag::note_odr_value_here)
         << FoundField->getType();
-
-      return make_error<ImportError>(ImportError::NameConflict);
+      ConflictingDecls.push_back(FoundField);
     }
+  }
+
+  if (!ConflictingDecls.empty()) {
+    Expected<DeclarationName> Resolution = Importer.HandleNameConflict(
+        Name, DC, Decl::IDNS_Member, ConflictingDecls.data(),
+        ConflictingDecls.size());
+    if (Resolution)
+      Name = Resolution.get();
+    else
+      return Resolution.takeError();
   }
 
   QualType ToType;
@@ -3316,6 +3325,7 @@ ExpectedDecl ASTNodeImporter::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
 
   // Determine whether we've already imported this field.
   auto FoundDecls = Importer.findDeclsInToCtx(DC, Name);
+  SmallVector<NamedDecl *, 4> ConflictingDecls;
   for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
     if (auto *FoundField = dyn_cast<IndirectFieldDecl>(FoundDecls[I])) {
       // For anonymous indirect fields, match up by index.
@@ -3335,14 +3345,24 @@ ExpectedDecl ASTNodeImporter::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
       if (!Name && I < N-1)
         continue;
 
-      // FIXME: Why is this case not handled with calling HandleNameConflict?
+      ConflictingDecls.push_back(FoundField);
+
       Importer.ToDiag(Loc, diag::warn_odr_field_type_inconsistent)
         << Name << D->getType() << FoundField->getType();
       Importer.ToDiag(FoundField->getLocation(), diag::note_odr_value_here)
         << FoundField->getType();
-
-      return make_error<ImportError>(ImportError::NameConflict);
     }
+  }
+
+  if (!ConflictingDecls.empty()) {
+    Expected<DeclarationName> Resolution = Importer.HandleNameConflict(
+        Name, DC, Decl::IDNS_Member, ConflictingDecls.data(),
+        ConflictingDecls.size());
+
+    if (Resolution)
+      Name = Resolution.get();
+    else
+      return Resolution.takeError();
   }
 
   // Import the type.
