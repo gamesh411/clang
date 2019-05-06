@@ -2972,6 +2972,10 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     if (!FoundFunctionOrErr)
       return FoundFunctionOrErr.takeError();
     if (FunctionDecl *FoundFunction = *FoundFunctionOrErr) {
+      // A structural match should be made here, but the current implementation
+      // only checks whether the function signature differs, and at this point,
+      // the signature is guaranteed to be the same. Thus there is no point
+      // calling isStructuralMatch on the original and the FoundFunction.
       if (Decl *Def = FindAndMapDefinition(D, FoundFunction))
         return Def;
       FoundByLookup = FoundFunction;
@@ -2997,7 +3001,6 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
           FoundByLookup = FoundFunction;
           break;
         }
-
         // FIXME: Check for overloading more carefully, e.g., by boosting
         // Sema::IsOverload out to the AST library.
 
@@ -5534,8 +5537,8 @@ ASTNodeImporter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   // Try to find a function in our own ("to") context with the same name, same
   // type, and in the same context as the function we're importing.
   if (!LexicalDC->isFunctionOrMethod()) {
-    unsigned IDNS = Decl::IDNS_Ordinary | Decl::IDNS_OrdinaryFriend;
     auto FoundDecls = Importer.findDeclsInToCtx(DC, Name);
+    unsigned IDNS = Decl::IDNS_Ordinary | Decl::IDNS_OrdinaryFriend;
     for (auto *FoundDecl : FoundDecls) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
@@ -5551,9 +5554,10 @@ ASTNodeImporter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
           FoundByLookup = FoundTemplate;
           break;
         }
-      }   // template
-      // TODO: handle conflicting names
-    } // for
+        // Structural mismatch is not a problem (there is no need to check
+        // name conflict), because FunctionTemplates can possibly overload.
+      } // template
+    }   // for
   }
 
   auto ParamsOrErr = import(D->getTemplateParameters());
